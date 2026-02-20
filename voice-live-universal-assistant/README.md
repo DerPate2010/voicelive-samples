@@ -194,4 +194,6 @@ The frontend and backend communicate over WebSocket at `/ws/{clientId}`.
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
+
+Copyright (c) Microsoft Corporation. All rights reserved.
