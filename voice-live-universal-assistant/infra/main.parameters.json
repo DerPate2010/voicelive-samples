@@ -34,6 +34,24 @@
     },
     "voiceLiveTranscribeModel": {
       "value": "${VOICELIVE_TRANSCRIBE_MODEL=gpt-4o-transcribe}"
+    },
+    "createFoundry": {
+      "value": "${CREATE_FOUNDRY=false}"
+    },
+    "createAgent": {
+      "value": "${CREATE_AGENT=false}"
+    },
+    "foundryAccountName": {
+      "value": "${FOUNDRY_ACCOUNT_NAME=}"
+    },
+    "foundryProjectName": {
+      "value": "${FOUNDRY_PROJECT_NAME=voicelive-project}"
+    },
+    "agentModelDeploymentName": {
+      "value": "${AGENT_MODEL_DEPLOYMENT_NAME=gpt-4.1-mini}"
+    },
+    "agentName": {
+      "value": "${AGENT_NAME=}"
     }
   }
 }

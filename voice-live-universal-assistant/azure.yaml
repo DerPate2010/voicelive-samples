@@ -29,3 +29,14 @@ hooks:
       shell: pwsh
       run: ./deployment/hooks/predeploy.ps1
       continueOnError: false
+
+  # After deploy: create Foundry Agent (only when createAgent=true)
+  postdeploy:
+    windows:
+      shell: pwsh
+      run: ./deployment/hooks/postdeploy.ps1
+      continueOnError: false
+    posix:
+      shell: pwsh
+      run: ./deployment/hooks/postdeploy.ps1
+      continueOnError: false

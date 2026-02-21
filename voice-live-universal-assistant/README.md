@@ -112,7 +112,7 @@ Switch modes by setting `VOICELIVE_MODE` in `.env` or via the Settings panel in 
 ## Project Structure
 
 ```
-voicelive-samples/
+voice-live-universal-assistant/
 ├── frontend/                  # Shared React + Vite + TypeScript frontend
 │   ├── public/
 │   │   ├── audio-capture-worklet.js    # Mic capture AudioWorklet (24kHz PCM16)
@@ -126,34 +126,94 @@ voicelive-samples/
 ├── python/                    # Python backend (FastAPI + Voice Live SDK)
 │   ├── app.py                 # FastAPI server with WebSocket endpoint
 │   ├── voice_handler.py       # VoiceLiveHandler — SDK bridge
-│   ├── tests/                 # 85 automated tests (settings + agent mode)
+│   ├── tests/                 # 91 automated tests (settings + agent mode)
 │   ├── requirements.txt       # Python dependencies
 │   ├── .env.sample            # Environment variable template
 │   └── README.md              # Python-specific docs
-├── infra/                     # Azure Bicep IaC (Container Apps + RBAC)
-│   ├── main.bicep             # Entry point
-│   ├── main-app.bicep         # App + Cognitive Services User role assignment
+├── java/                      # Java backend (🚧 Coming soon)
+├── javascript/                # JavaScript/Node.js backend (🚧 Coming soon)
+├── csharp/                    # C# ASP.NET Core backend (🚧 Coming soon)
+├── infra/                     # Azure Bicep IaC
+│   ├── main.bicep             # Entry point (Container Apps + optional Foundry + Agent)
+│   ├── main-app.bicep         # Container App with Voice Live env vars
 │   ├── main-infrastructure.bicep  # Log Analytics, ACR, Container Apps Env
-│   └── core/host/             # Reusable modules (container-app, role-assignment)
-├── deployment/                # azd hooks (predeploy image build)
+│   ├── modules/
+│   │   ├── foundry.bicep      # AI Foundry account + project (optional)
+│   │   └── foundry-rbac.bicep # Azure AI User role for tracing
+│   └── core/host/             # Reusable modules (container-app, container-registry)
+├── deployment/
+│   ├── hooks/
+│   │   ├── postprovision.ps1  # RBAC assignment (+ Foundry RBAC when enabled)
+│   │   ├── predeploy.ps1      # ACR cloud build + Container App update
+│   │   └── postdeploy.ps1     # Foundry Agent creation (when createAgent=true)
+│   └── scripts/
+│       └── create_agent.py    # Agent creation with Voice Live metadata
 ├── img/                       # UX mockup reference images
-├── PLAN.md                    # Project planning document
 └── README.md                  # This file
 ```
 
 ## Deployment (Azure Developer CLI)
+
+### Option 1: Basic — Container App only (default)
+
+Deploys the web app with your existing Azure AI Services resource:
 
 ```bash
 azd auth login
 azd up
 ```
 
+You'll be prompted for `AZURE_VOICELIVE_ENDPOINT` and optionally `AZURE_VOICELIVE_API_KEY`.
+
 This provisions:
 - **Container Apps Environment** with Log Analytics
-- **Container Registry** (managed identity pull, no admin credentials)
+- **Container Registry** (ACR cloud build — no local Docker required)
 - **Container App** with system-assigned managed identity
-- **RBAC role assignment** — Cognitive Services User for token-based auth
-- API key is optional — only injected as a Container App secret if provided
+- **RBAC** — Cognitive Services User for token-based auth
+
+### Option 2: With Foundry — Create AI Foundry account + project
+
+Provisions a new AI Foundry resource alongside the web app:
+
+```bash
+azd env set CREATE_FOUNDRY true
+azd up
+```
+
+This adds:
+- **AI Services Account** (kind: AIServices) with system-assigned identity
+- **AI Foundry Project** under the account
+- **Azure AI User** role (for tracing)
+- **Azure AI Developer** role on the Container App identity
+
+The provisioned project endpoint is automatically passed to the Container App.
+
+### Option 3: With Agent — Foundry + GPT-4.1-mini + Foundry Agent
+
+Full end-to-end: provisions Foundry, deploys GPT-4.1-mini, and creates an agent with Voice Live configuration:
+
+```bash
+azd env set CREATE_FOUNDRY true
+azd env set CREATE_AGENT true
+azd env set AGENT_NAME "my-voice-assistant"   # optional, defaults to voicelive-assistant
+azd up
+```
+
+This adds (on top of Option 2):
+- **GPT-4.1-mini model deployment** on the Foundry account
+- **Foundry Agent** created via Python SDK with Voice Live session config (Azure voice, semantic VAD, noise suppression, echo cancellation)
+- App automatically switches to **agent mode**
+
+### Deployment parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CREATE_FOUNDRY` | `false` | Create AI Foundry account + project |
+| `CREATE_AGENT` | `false` | Deploy model + create agent (requires `CREATE_FOUNDRY=true`) |
+| `FOUNDRY_ACCOUNT_NAME` | auto-generated | Custom name for the AI Services account |
+| `FOUNDRY_PROJECT_NAME` | `voicelive-project` | Name for the Foundry project |
+| `AGENT_MODEL_DEPLOYMENT_NAME` | `gpt-4.1-mini` | Model deployment name |
+| `AGENT_NAME` | `voicelive-assistant` | Name for the created agent |
 
 ## Development
 

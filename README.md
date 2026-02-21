@@ -80,7 +80,7 @@ Full-stack web application with a **shared React+Vite+TypeScript frontend** and 
 - **Shared frontend**: Fluent-aligned design system (light/dark/system themes), voice orb visualization, CC transcript, voice type selection (OpenAI + Azure Standard)
 - **Python backend** (v1): FastAPI + WebSocket proxy with Agent and Model mode support
 - **Java, JavaScript, C# backends**: Planned
-- **Azure deployment**: Bicep IaC + `azd up` (Container Apps, ACR, RBAC)
+- **Azure deployment**: Full `azd up` infrastructure with Bicep IaC — Container Apps, ACR, RBAC, optional AI Foundry provisioning, and optional Foundry Agent creation with GPT-4.1-mini
 - 91 unit tests + E2E audio test
 
 Each language folder contains detailed setup instructions, configuration examples, and troubleshooting guides specific to that language and platform.

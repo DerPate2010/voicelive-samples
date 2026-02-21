@@ -19,6 +19,9 @@ param voiceLiveVoice string
 param voiceLiveVoiceType string
 param voiceLiveTranscribeModel string
 
+@description('Foundry project endpoint (set by createFoundry or user-provided)')
+param voiceLiveProjectEndpoint string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 
 module webApp './core/host/container-app.bicep' = {
@@ -70,6 +73,12 @@ module webApp './core/host/container-app.bicep' = {
         {
           name: 'VOICELIVE_TRANSCRIBE_MODEL'
           value: voiceLiveTranscribeModel
+        }
+      ],
+      empty(voiceLiveProjectEndpoint) ? [] : [
+        {
+          name: 'AZURE_VOICELIVE_PROJECT_ENDPOINT'
+          value: voiceLiveProjectEndpoint
         }
       ],
       empty(voiceLiveApiKey) ? [] : [
