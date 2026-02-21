@@ -13,6 +13,11 @@ $envName = azd env get-value AZURE_ENV_NAME 2>$null
 $rgName = azd env get-value AZURE_RESOURCE_GROUP_NAME 2>$null
 $appName = azd env get-value AZURE_CONTAINER_APP_NAME 2>$null
 
+# Determine backend language and corresponding Dockerfile
+$backendLang = (azd env get-value BACKEND_LANGUAGE 2>$null)
+if (-not $backendLang) { $backendLang = "python" }
+$dockerfile = "Dockerfile.$backendLang"
+
 if (-not $acrName) {
     Write-Host "ACR not provisioned yet — run 'azd provision' first."
     exit 1
@@ -23,8 +28,9 @@ $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 $imageTag = "$loginServer/voicelive-web:${envName}-${timestamp}"
 
 Write-Host "===== Building Container Image ====="
-Write-Host "  ACR:   $acrName"
-Write-Host "  Image: $imageTag"
+Write-Host "  ACR:        $acrName"
+Write-Host "  Image:      $imageTag"
+Write-Host "  Dockerfile: $dockerfile"
 Write-Host ""
 
 # Try local Docker first, fall back to ACR cloud build
@@ -37,7 +43,7 @@ if ($dockerAvailable) {
 
 if ($dockerRunning) {
     Write-Host "Using local Docker build..."
-    docker build -t $imageTag .
+    docker build -t $imageTag -f $dockerfile .
     if ($LASTEXITCODE -ne 0) { throw "Docker build failed" }
 
     Write-Host "Pushing to ACR..."
@@ -46,7 +52,7 @@ if ($dockerRunning) {
     if ($LASTEXITCODE -ne 0) { throw "Docker push failed" }
 } else {
     Write-Host "Using ACR cloud build (no local Docker required)..."
-    az acr build --registry $acrName --image "voicelive-web:${envName}-${timestamp}" . 2>&1
+    az acr build --registry $acrName --image "voicelive-web:${envName}-${timestamp}" --file $dockerfile . 2>&1
     if ($LASTEXITCODE -ne 0) { throw "ACR cloud build failed" }
 }
 

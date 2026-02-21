@@ -59,6 +59,9 @@ param agentModelDeploymentName string = 'gpt-4.1-mini'
 @description('Agent name (used when createAgent=true)')
 param agentName string = 'voicelive-assistant'
 
+@description('Backend language for Dockerfile selection (e.g., python, csharp, java, javascript)')
+param backendLanguage string = 'python'
+
 // createAgent implies createFoundry
 var effectiveCreateFoundry = createFoundry || createAgent
 
@@ -173,3 +176,6 @@ output CREATE_FOUNDRY string = string(effectiveCreateFoundry)
 output CREATE_AGENT string = string(createAgent)
 output AGENT_MODEL_DEPLOYMENT_NAME string = createAgent ? agentModelDeploymentName : ''
 output AGENT_NAME string = createAgent ? agentName : ''
+
+// Backend language selection
+output BACKEND_LANGUAGE string = backendLanguage

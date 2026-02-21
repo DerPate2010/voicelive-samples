@@ -52,6 +52,9 @@
     },
     "agentName": {
       "value": "${AGENT_NAME=}"
+    },
+    "backendLanguage": {
+      "value": "${BACKEND_LANGUAGE=python}"
     }
   }
 }
