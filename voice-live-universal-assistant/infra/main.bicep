@@ -92,17 +92,13 @@ module infrastructure 'main-infrastructure.bicep' = {
 var effectiveFoundryAccountName = !empty(foundryAccountName) ? foundryAccountName : 'ai-${resourceToken}'
 var effectiveFoundryProjectName = foundryProjectName
 
-// Model deployments: GPT-4.1-mini when createAgent, gpt-realtime for model mode (createFoundry only)
+// Model deployments: GPT-4.1-mini when createAgent (required for Foundry Agent).
+// Model-mode uses gpt-realtime which is routed server-side by the Voice Live service
+// and does NOT need a Cognitive Services model deployment.
 var modelDeployments = createAgent ? [
   {
     name: agentModelDeploymentName
     model: 'gpt-4.1-mini'
-    capacity: 1
-  }
-] : effectiveCreateFoundry ? [
-  {
-    name: 'gpt-realtime'
-    model: 'gpt-4o-realtime-preview'
     capacity: 1
   }
 ] : []
