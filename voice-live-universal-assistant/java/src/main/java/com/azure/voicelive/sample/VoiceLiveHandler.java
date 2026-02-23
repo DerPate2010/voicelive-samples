@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import com.azure.ai.voicelive.VoiceLiveAsyncClient;
 import com.azure.ai.voicelive.VoiceLiveClientBuilder;
+import com.azure.ai.voicelive.VoiceLiveServiceVersion;
 import com.azure.ai.voicelive.VoiceLiveSessionAsyncClient;
 import com.azure.ai.voicelive.models.AgentSessionConfig;
 import com.azure.ai.voicelive.models.AudioEchoCancellation;
@@ -96,7 +97,8 @@ public class VoiceLiveHandler {
                     clientId, config.getMode(), config.getModel(), config.getVoice());
 
             VoiceLiveClientBuilder builder = new VoiceLiveClientBuilder()
-                    .endpoint(endpoint);
+                    .endpoint(endpoint)
+                    .serviceVersion(VoiceLiveServiceVersion.V2026_01_01_PREVIEW);
 
             if (credential instanceof com.azure.core.credential.KeyCredential keyCredential) {
                 builder.credential(keyCredential);
