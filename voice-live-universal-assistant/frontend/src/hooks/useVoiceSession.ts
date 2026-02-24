@@ -226,9 +226,12 @@ export function useVoiceSession() {
           if (settings.greetingText) config.greeting_text = settings.greetingText;
         }
 
-        // Interim response
-        config.interim_response = settings.interimResponse;
-        if (settings.interimResponse) {
+        // Interim response — not supported for realtime models in model mode
+        const REALTIME_MODELS = ['gpt-realtime', 'gpt-realtime-mini', 'phi4-mm-realtime', 'phi4-mini'];
+        const effectiveInterim = settings.interimResponse
+          && !(settings.mode === 'model' && REALTIME_MODELS.includes(settings.model));
+        config.interim_response = effectiveInterim;
+        if (effectiveInterim) {
           config.interim_response_type = settings.interimResponseType;
           config.interim_trigger_tool = settings.interimTriggerTool;
           config.interim_trigger_latency = settings.interimTriggerLatency;

@@ -509,17 +509,27 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
         <hr style={dividerStyle} />
 
-        {/* Interim Response */}
-        <div style={checkboxRowStyle}>
-          <label style={checkboxLabelStyle}>
-            <input
-              type="checkbox"
-              checked={settings.interimResponse}
-              onChange={(e) => onUpdate({ interimResponse: e.target.checked })}
-            />
-            Interim Response
-          </label>
-        </div>
+        {/* Interim Response — only works with agent mode or text models in model mode */}
+        {(() => {
+          const isRealtimeModelMode = settings.mode === 'model'
+            && [...GPT_MULTIMODAL_MODELS, ...PHI_MULTIMODAL_MODELS].includes(settings.model);
+          return (
+            <div style={checkboxRowStyle}>
+              <label style={{ ...checkboxLabelStyle, opacity: isRealtimeModelMode ? 0.45 : 1, cursor: isRealtimeModelMode ? 'not-allowed' : 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isRealtimeModelMode ? false : settings.interimResponse}
+                  disabled={isRealtimeModelMode}
+                  onChange={(e) => onUpdate({ interimResponse: e.target.checked })}
+                />
+                Interim Response
+                {isRealtimeModelMode && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--fg-3)', marginLeft: 6 }}>(text models only)</span>
+                )}
+              </label>
+            </div>
+          );
+        })()}
 
         {settings.interimResponse && (
           <>

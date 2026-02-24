@@ -43,7 +43,7 @@ const App: React.FC = () => {
     <div style={{ height: '100vh', position: 'relative' }}>
       <ErrorBanner message={errorMessage} onDismiss={dismissError} />
       {state === 'idle' && (
-        <StartScreen onStart={startSession} onOpenSettings={() => setSettingsOpen(true)} />
+        <StartScreen onStart={startSession} onOpenSettings={() => setSettingsOpen(true)} settings={settings} />
       )}
 
       {isActive && (

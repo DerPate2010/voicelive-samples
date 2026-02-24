@@ -1,12 +1,17 @@
 import React from 'react';
 import { VoiceOrb } from './VoiceOrb';
+import type { VoiceSettings } from '../types';
 
 interface StartScreenProps {
   onStart: () => void;
   onOpenSettings: () => void;
+  settings: VoiceSettings;
 }
 
-export const StartScreen: React.FC<StartScreenProps> = ({ onStart, onOpenSettings }) => {
+export const StartScreen: React.FC<StartScreenProps> = ({ onStart, onOpenSettings, settings }) => {
+  const agentMissingConfig = settings.mode === 'agent'
+    && (!settings.agentName?.trim() || !settings.project?.trim());
+
   return (
     <div style={containerStyle}>
       <button
@@ -26,9 +31,17 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStart, onOpenSetting
       <h1 style={headingStyle}>Let's talk</h1>
       <p style={descStyle}>Click to start a voice session with the AI assistant</p>
 
-      <button style={startButtonStyle} onClick={onStart}>
+      <button
+        style={{ ...startButtonStyle, ...(agentMissingConfig ? disabledStartStyle : {}) }}
+        onClick={agentMissingConfig ? undefined : onStart}
+        disabled={agentMissingConfig}
+        title={agentMissingConfig ? 'Agent Name and Project are required — configure in Settings' : undefined}
+      >
         Start session
       </button>
+      {agentMissingConfig && (
+        <p style={warningStyle}>Agent Name and Project are required — open Settings to configure</p>
+      )}
     </div>
   );
 };
@@ -84,4 +97,18 @@ const startButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
   transition: 'transform 0.15s, box-shadow 0.15s',
   boxShadow: '0 4px 20px var(--voice-glow)',
+};
+
+const disabledStartStyle: React.CSSProperties = {
+  opacity: 0.45,
+  cursor: 'not-allowed',
+  boxShadow: 'none',
+};
+
+const warningStyle: React.CSSProperties = {
+  fontSize: '0.85rem',
+  color: 'var(--fg-3)',
+  margin: 0,
+  textAlign: 'center',
+  maxWidth: '360px',
 };
