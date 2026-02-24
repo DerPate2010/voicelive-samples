@@ -235,6 +235,15 @@ public class VoiceLiveHandler
             options.InputAudioNoiseReduction = new AudioNoiseReduction(AudioNoiseReductionType.AzureDeepNoiseSuppression);
         }
 
+        // Auto-correct transcribeModel for cascaded (text) models
+        var multimodal = new[] { "gpt-realtime", "gpt-realtime-mini", "phi4-mm-realtime", "phi4-mini" };
+        if (!multimodal.Contains(_config.Model) && _config.TranscribeModel != "azure-speech")
+        {
+            _logger.LogInformation("[{ClientId}] Auto-corrected transcribeModel to azure-speech for cascaded model {Model}", _clientId, _config.Model);
+            _config.TranscribeModel = "azure-speech";
+            _config.InputLanguage = "";
+        }
+
         // Transcription — enabled in both modes for user speech display
         var transcription = new AudioInputTranscriptionOptions(
             new AudioInputTranscriptionOptionsModel(_config.TranscribeModel));
@@ -264,7 +273,7 @@ public class VoiceLiveHandler
 
                     interimObj = new
                     {
-                        type = "static",
+                        type = "static_interim_response",
                         triggers,
                         latency_threshold_ms = _config.InterimTriggerLatency ? _config.InterimLatencyMs : (int?)null,
                         texts,
@@ -274,7 +283,7 @@ public class VoiceLiveHandler
                 {
                     interimObj = new
                     {
-                        type = "llm",
+                        type = "llm_interim_response",
                         triggers,
                         latency_threshold_ms = _config.InterimTriggerLatency ? _config.InterimLatencyMs : (int?)null,
                         instructions = string.IsNullOrWhiteSpace(_config.InterimInstructions) ? (string?)null : _config.InterimInstructions,

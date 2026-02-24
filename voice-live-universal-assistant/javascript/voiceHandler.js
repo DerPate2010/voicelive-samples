@@ -420,6 +420,13 @@ export class VoiceHandler {
   }
 
   _getTranscriptionOptions() {
+    // Auto-correct transcribeModel for cascaded (text) models
+    const MULTIMODAL = ["gpt-realtime", "gpt-realtime-mini", "phi4-mm-realtime", "phi4-mini"];
+    if (!MULTIMODAL.includes(this.config.model) && this.config.transcribeModel !== "azure-speech") {
+      console.log(`[${this.clientId}] Auto-corrected transcribeModel to azure-speech for cascaded model ${this.config.model}`);
+      this.config.transcribeModel = "azure-speech";
+      this.config.inputLanguage = "";
+    }
     const opts = {
       model: this.config.transcribeModel || "gpt-4o-transcribe",
     };
