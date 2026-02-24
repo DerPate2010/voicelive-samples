@@ -259,54 +259,15 @@ public class VoiceLiveHandler
         _logger.LogInformation("[{ClientId}] Session configured ({Mode} mode, voice={Voice}, vad={Vad})",
             _clientId, _config.Mode, _config.Voice, _config.VadType);
 
-        // Interim response — sent as a separate session.update command after ConfigureSessionAsync
-        // because VoiceLiveSessionOptions doesn't expose the InterimResponse property in this SDK version.
-        // Pattern from: https://learn.microsoft.com/azure/ai-services/speech-service/how-to-voice-agent-integration
+        // KNOWN ISSUE: Interim response is disabled in the C# backend.
+        // Azure.AI.VoiceLive 1.1.0-beta.2 does not expose InterimResponse on VoiceLiveSessionOptions,
+        // and SendCommandAsync with a session.update delta causes session corruption in cascaded/agent
+        // pipelines. The frontend setting is silently ignored until a future SDK version provides a
+        // strongly-typed InterimResponse property. See csharp/KNOWN_ISSUES.md.
         if (_config.InterimResponse)
         {
-            var triggers = new List<string>();
-            if (_config.InterimTriggerLatency) triggers.Add("latency");
-            if (_config.InterimTriggerTool) triggers.Add("tool");
-
-            if (triggers.Count > 0)
-            {
-                object interimConfig;
-                if (_config.InterimResponseType == "static")
-                {
-                    var texts = string.IsNullOrWhiteSpace(_config.InterimStaticTexts)
-                        ? new[] { "One moment please..." }
-                        : _config.InterimStaticTexts.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    interimConfig = new
-                    {
-                        type = "static_interim_response",
-                        triggers,
-                        latency_threshold_ms = _config.InterimTriggerLatency ? _config.InterimLatencyMs : (int?)null,
-                        texts
-                    };
-                }
-                else
-                {
-                    interimConfig = new
-                    {
-                        type = "llm_interim_response",
-                        triggers,
-                        latency_threshold_ms = _config.InterimTriggerLatency ? _config.InterimLatencyMs : (int?)null,
-                        instructions = string.IsNullOrWhiteSpace(_config.InterimInstructions)
-                            ? "Create friendly interim responses indicating wait time due to ongoing processing, if any."
-                            : _config.InterimInstructions
-                    };
-                }
-
-                await session.SendCommandAsync(
-                    BinaryData.FromObjectAsJson(new
-                    {
-                        type = "session.update",
-                        session = new { interim_response = interimConfig }
-                    }));
-
-                _logger.LogInformation("[{ClientId}] Interim response enabled (type={Type}, triggers={Triggers})",
-                    _clientId, _config.InterimResponseType, string.Join(",", triggers));
-            }
+            _logger.LogWarning("[{ClientId}] Interim response setting ignored — not supported in C# SDK 1.1.0-beta.2. See KNOWN_ISSUES.md.",
+                _clientId);
         }
     }
 
