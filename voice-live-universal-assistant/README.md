@@ -405,6 +405,20 @@ All backends pin the API version to `2026-01-01-preview` (the SDK defaults to GA
 - **Start Session** button is disabled when in agent mode and Agent Name or Project are empty, with a helper message directing the user to Settings.
 - **Transcription model** is auto-corrected to `azure-speech` when a text model is selected (cascaded pipelines only support `azure-speech`).
 
+### Validation Guard Matrix
+
+Shows where each validation is enforced — frontend-only guards rely on the UI to prevent invalid input, while backend guards provide server-side enforcement.
+
+| Guard | Frontend | Python | Java | JavaScript | C# |
+|-------|----------|--------|------|------------|-----|
+| Agent mode requires name + project | ✅ Disables Start btn | — SDK validates | ✅ Falls back to model | — SDK validates | ✅ Falls back to model |
+| Transcribe model auto-correction | ✅ On model change | — | — | ✅ For agent/cascaded | ✅ For cascaded models |
+| Interim response disabled for realtime | ✅ Greys out toggle | — | — | — | ❌ SDK gap (ignored) |
+| Session cleanup on start failure | — | ✅ | ✅ | ✅ | ✅ |
+| Auth identity requires resource override | — | ✅ | ✅ | ✅ | ✅ |
+
+> **Legend:** ✅ = enforced, — = not needed / passed through to SDK, ❌ = not supported
+
 ### Backend Feature Matrix
 
 | Feature | Python | Java | JavaScript | C# |
@@ -434,7 +448,7 @@ pip install websockets playwright
 python -m playwright install chromium
 ```
 
-WebSocket tests require WAV audio files. Set `E2E_AUDIO_DIR` to a folder containing `.wav` files, or place them in the default path defined in the script.
+WebSocket tests use WAV audio files when available, or fall back to a synthetic 440Hz sine wave. Set `E2E_AUDIO_DIR` to a folder containing `.wav` files for real speech testing. Backend URLs can be overridden via environment variables (`E2E_PYTHON_URL`, `E2E_CSHARP_URL`, `E2E_JAVASCRIPT_URL`, `E2E_JAVA_URL`).
 
 ### Running Tests
 
@@ -457,7 +471,7 @@ python tests/e2e_all_backends.py --mode agent
 python tests/e2e_all_backends.py --url https://your-backend.azurecontainerapps.io
 ```
 
-Backend URLs are configured in the `BACKENDS` dictionary at the top of the test script. Update them to match your deployed environments.
+Backend URLs default to the development deployment and can be overridden via environment variables.
 
 ## License
 
