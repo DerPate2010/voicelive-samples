@@ -15,9 +15,10 @@ The frontend builds to static files served by the backend — no separate fronte
 
 ## Prerequisites
 
-- **Node.js** 18+ and npm (for building the frontend)
+- **Node.js** 20+ and npm (for building the frontend; also for the JavaScript backend)
 - **Python** 3.9+ (for the Python backend)
 - **Java** 17+ and Maven 3.8+ (for the Java backend)
+- **.NET** 8.0 SDK (for the C# backend)
 - An **Azure AI Services** resource with Voice Live API access
 
 ## Authentication
@@ -134,7 +135,60 @@ mvn spring-boot:run
 
 Open **http://localhost:8000** in your browser.
 
-> **Note:** See [java/KNOWN_ISSUES.md](java/KNOWN_ISSUES.md) for SDK feature gaps in the current beta release.
+> **Note:** See [java/KNOWN_ISSUES.md](java/KNOWN_ISSUES.md) for Java-specific ecosystem notes.
+
+## Quick Start (JavaScript / Node.js)
+
+### 1. Build the frontend
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+### 2. Set up the Node.js backend
+
+```bash
+cd javascript
+npm install
+cp .env.sample .env
+# Edit .env with your Azure Voice Live endpoint
+```
+
+### 3. Run
+
+```bash
+npm start
+```
+
+Open **http://localhost:8000** in your browser.
+
+## Quick Start (C# / ASP.NET Core)
+
+### 1. Build the frontend
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+### 2. Set up the C# backend
+
+```bash
+cd csharp
+cp .env.sample .env
+# Edit .env with your Azure Voice Live endpoint
+```
+
+### 3. Build and run
+
+```bash
+dotnet run
+```
+
+Open **http://localhost:8000** in your browser.
 
 ## Connection Modes
 
@@ -172,8 +226,20 @@ voice-live-universal-assistant/
 │   ├── KNOWN_ISSUES.md        # SDK feature gaps and workarounds
 │   ├── .env.sample            # Environment variable template
 │   └── README.md              # Java-specific docs
-├── javascript/                # JavaScript/Node.js backend (🚧 Coming soon)
-├── csharp/                    # C# ASP.NET Core backend (🚧 Coming soon)
+├── javascript/                # JavaScript/Node.js backend (Express + Voice Live SDK)
+│   ├── app.js                 # Express server with WebSocket endpoint
+│   ├── voiceHandler.js        # VoiceHandler — SDK bridge
+│   ├── package.json           # npm config (@azure/ai-voicelive 1.0.0-beta.3)
+│   ├── .env.sample            # Environment variable template
+│   └── README.md              # JavaScript-specific docs
+├── csharp/                    # C# ASP.NET Core backend (Voice Live SDK)
+│   ├── Program.cs             # ASP.NET Core minimal API + WebSocket middleware
+│   ├── VoiceLiveHandler.cs    # VoiceLiveHandler — SDK bridge
+│   ├── SessionConfig.cs       # Session configuration POCO
+│   ├── VoiceLiveWebApp.csproj # .NET project (Azure.AI.VoiceLive 1.1.0-beta.2)
+│   ├── KNOWN_ISSUES.md        # SDK feature gaps and workarounds
+│   ├── .env.sample            # Environment variable template
+│   └── README.md              # C#-specific docs
 ├── infra/                     # Azure Bicep IaC
 │   ├── main.bicep             # Entry point (Container Apps + optional Foundry + Agent)
 │   ├── main-app.bicep         # Container App with Voice Live env vars
@@ -189,7 +255,7 @@ voice-live-universal-assistant/
 │   │   └── postdeploy.ps1     # Foundry Agent creation (when createAgent=true)
 │   └── scripts/
 │       └── create_agent.py    # Agent creation with Voice Live metadata
-├── img/                       # UX mockup reference images
+├── tests/                     # E2E test suite (WebSocket + Playwright)
 └── README.md                  # This file
 ```
 
@@ -209,17 +275,18 @@ azd env set AZURE_VOICELIVE_ENDPOINT "https://your-resource.cognitiveservices.az
 # Optional: choose backend language (default: python)
 azd env set BACKEND_LANGUAGE java   # python | java | javascript | csharp
 
-# Default mode is "model" — works out of the box with just an endpoint.
-# To use agent mode instead:
-azd env set VOICELIVE_MODE agent
-azd env set AZURE_VOICELIVE_AGENT_NAME "your-agent-name"
-azd env set AZURE_VOICELIVE_PROJECT "your-project-name"
-
 # Optional: API key (only if token auth is unavailable for your resource)
 azd env set AZURE_VOICELIVE_API_KEY "your-api-key"
 
 azd up
 ```
+
+> **Want agent mode instead?** See [Option 3](#option-3-with-agent--foundry--gpt-41-mini--foundry-agent) for a fully automated setup, or configure manually:
+> ```bash
+> azd env set VOICELIVE_MODE agent
+> azd env set AZURE_VOICELIVE_AGENT_NAME "your-agent-name"
+> azd env set AZURE_VOICELIVE_PROJECT "your-project-name"
+> ```
 
 This provisions:
 - **Container Apps Environment** with Log Analytics
@@ -323,16 +390,89 @@ The frontend and backend communicate over WebSocket at `/ws/{clientId}`.
 
 ## SDK Versions & Known Issues
 
-| Backend | SDK | Version | Notes |
-|---------|-----|---------|-------|
-| Python  | `azure-ai-voicelive` | 1.0.0b1 | API version pinned to `2026-01-01-preview` in `connect()` — required for interim response and agent mode |
-| Java    | `azure-ai-voicelive` | 1.0.0-beta.5 | Service version pinned to `V2026_01_01_PREVIEW` — SDK defaults to GA which breaks agent/interim features. See [java/KNOWN_ISSUES.md](java/KNOWN_ISSUES.md) |
+All backends pin the API version to `2026-01-01-preview` (the SDK defaults to GA which lacks agent mode and interim response support).
+
+| Backend | SDK | Version | Language-Specific Notes |
+|---------|-----|---------|------------------------|
+| Python  | `azure-ai-voicelive` | 1.0.0b1 | No known limitations |
+| Java    | `azure-ai-voicelive` | 1.0.0-beta.5 | `.env` loading via custom parser; Netty version mismatch warning — see [java/KNOWN_ISSUES.md](java/KNOWN_ISSUES.md) |
+| JavaScript | `@azure/ai-voicelive` | 1.0.0-beta.3 | Node.js 20+ required. No known limitations |
+| C#      | `Azure.AI.VoiceLive` | 1.1.0-beta.2 | Interim response not supported (SDK gap) — see [csharp/KNOWN_ISSUES.md](csharp/KNOWN_ISSUES.md) |
 
 ### Frontend UX Guards
 
-- **Interim Response** is disabled (greyed out) when a realtime model is selected in model mode — it only works with agent mode or text models using cascaded pipelines (Azure Speech transcription).
+- **Interim Response** is disabled (greyed out) when a realtime model is selected in model mode — it only works with agent mode or text models using cascaded pipelines (Azure Speech transcription). **Note:** The C# backend silently ignores this setting regardless — see [csharp/KNOWN_ISSUES.md](csharp/KNOWN_ISSUES.md).
 - **Start Session** button is disabled when in agent mode and Agent Name or Project are empty, with a helper message directing the user to Settings.
 - **Transcription model** is auto-corrected to `azure-speech` when a text model is selected (cascaded pipelines only support `azure-speech`).
+
+### Validation Guard Matrix
+
+Shows where each validation is enforced — frontend-only guards rely on the UI to prevent invalid input, while backend guards provide server-side enforcement.
+
+| Guard | Frontend | Python | Java | JavaScript | C# |
+|-------|----------|--------|------|------------|-----|
+| Agent mode requires name + project | ✅ Disables Start btn | — SDK validates | ✅ Falls back to model | — SDK validates | ✅ Falls back to model |
+| Transcribe model auto-correction | ✅ On model change | — | — | ✅ For agent/cascaded | ✅ For cascaded models |
+| Interim response disabled for realtime | ✅ Greys out toggle | — | — | — | ❌ SDK gap (ignored) |
+| Session cleanup on start failure | — | ✅ | ✅ | ✅ | ✅ |
+| Auth identity requires resource override | — | ✅ | ✅ | ✅ | ✅ |
+
+> **Legend:** ✅ = enforced, — = not needed / passed through to SDK, ❌ = not supported
+
+### Backend Feature Matrix
+
+| Feature | Python | Java | JavaScript | C# |
+|---------|--------|------|------------|-----|
+| Model mode (realtime) | ✅ | ✅ | ✅ | ✅ |
+| Model mode (text/cascaded) | ✅ | ✅ | ✅ | ✅ |
+| Agent mode | ✅ | ✅ | ✅ | ✅ |
+| Interim response | ✅ | ✅ | ✅ | ❌ SDK gap |
+| Echo cancellation | ✅ | ✅ | ✅ | ✅ |
+| Noise reduction | ✅ | ✅ | ✅ | ✅ |
+
+## Future Improvements
+
+- **Agent mode fail-fast:** When `mode=agent` but `agentName` or `projectName` are missing, the C# and Java backends silently fall back to model mode. The frontend already prevents this (Start button is disabled until both fields are set), but the backends should return an explicit error instead of downgrading. Python and JavaScript pass the config through and let the SDK validate.
+- **Align backend validation guards:** As shown in the [Validation Guard Matrix](#validation-guard-matrix), transcribe model auto-correction and interim response guards are inconsistent across backends. Python and Java rely entirely on the frontend for these validations. All backends should enforce the same server-side guards to prevent invalid configurations when the frontend is bypassed (e.g., direct WebSocket clients).
+
+## Testing
+
+An E2E test suite is available in [`tests/e2e_all_backends.py`](tests/e2e_all_backends.py) covering all four backends with two test types:
+
+- **WebSocket tests** — connect directly to the backend WebSocket endpoint, send a `start_session` message, stream real WAV audio as PCM16 chunks, and verify that audio and transcript responses are received.
+- **Playwright browser tests** — open the frontend UI in a headless Chromium browser with a mocked microphone (oscillator tone), click Start, and verify the page loads, the voice orb renders, and a session becomes active.
+
+### Prerequisites
+
+```bash
+pip install websockets playwright
+python -m playwright install chromium
+```
+
+WebSocket tests use WAV audio files when available, or fall back to a synthetic 440Hz sine wave. Set `E2E_AUDIO_DIR` to a folder containing `.wav` files for real speech testing. Backend URLs can be overridden via environment variables (`E2E_PYTHON_URL`, `E2E_CSHARP_URL`, `E2E_JAVASCRIPT_URL`, `E2E_JAVA_URL`).
+
+### Running Tests
+
+```bash
+cd voice-live-universal-assistant
+
+# All backends, both test types (model mode)
+python tests/e2e_all_backends.py
+
+# WebSocket tests only
+python tests/e2e_all_backends.py --ws-only
+
+# Playwright browser tests only
+python tests/e2e_all_backends.py --browser-only
+
+# Agent mode (default is model)
+python tests/e2e_all_backends.py --mode agent
+
+# Single backend URL
+python tests/e2e_all_backends.py --url https://your-backend.azurecontainerapps.io
+```
+
+Backend URLs default to the development deployment and can be overridden via environment variables.
 
 ## License
 

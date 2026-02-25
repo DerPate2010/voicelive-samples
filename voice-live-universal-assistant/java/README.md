@@ -58,9 +58,7 @@ Identical to the Python backend:
 
 ## Known Issues
 
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for resolved and remaining issues in the beta.5 release.
-
-> **Important:** The Java SDK defaults `VoiceLiveServiceVersion.getLatest()` to the GA version (`2025-10-01`), which breaks agent mode, interim response, and pre-generated greeting. The backend explicitly pins `VoiceLiveServiceVersion.V2026_01_01_PREVIEW` to ensure all features work.
+See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for Java-specific SDK and ecosystem limitations.
 
 ## Connection Modes
 

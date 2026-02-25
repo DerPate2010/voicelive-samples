@@ -71,7 +71,7 @@ python -m pytest tests/ -v
 
 ## Known Issues
 
-> **API version pinning:** The Python SDK defaults to the GA API version, which breaks `interim_response` and some agent features. The backend explicitly passes `api_version="2026-01-01-preview"` to `connect()` until this is fixed in a future SDK release.
+No Python-specific SDK limitations at this time. All frontend features are supported.
 
 ## WebSocket Protocol
 

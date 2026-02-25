@@ -9,3 +9,4 @@ logs/
 *.log
 *.tsbuildinfo
 package-lock.json
+tests/screenshot_*.png
