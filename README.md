@@ -47,6 +47,7 @@ This repository contains samples in multiple programming languages. Choose your 
 ### [C# Samples](./csharp/README.md)
 Complete C# samples demonstrating:
 - **Agent Quickstart**: Connect to Azure AI Foundry agents with proactive greetings
+- **Agents New Quickstart**: Create and run Voice Live-enabled Foundry Agents (new SDK patterns)
 - **Model Quickstart**: Direct VoiceLive model integration
 - **Bring-Your-Own-Model (BYOM) Quickstart**: Use your own models hosted in Foundry with proactive greetings
 - **Customer Service Bot**: Advanced function calling for customer service scenarios and proactive greetings
@@ -55,6 +56,7 @@ Complete C# samples demonstrating:
 ### [Python Samples](./python/)
 Python samples showcasing:
 - **Agent Quickstart**: Azure AI Foundry agent integration with proactive greetings
+- **Agents New Quickstart**: Voice Live + Foundry Agent v2 samples and agent-creation utility
 - **Model Quickstart**: Direct model access with flexible authentication
 - **Bring-Your-Own-Model (BYOM) Quickstart**: Use your own models hosted in Foundry with proactive greetings
 - **Function Calling**: Advanced tool integration with custom functions and proactive greetings
@@ -63,6 +65,8 @@ Python samples showcasing:
 
 ### [JavaScript Samples](./javascript/)
 JavaScript/TypeScript samples showcasing:
+- **Agents New Quickstart**: Node.js Voice Live + Foundry Agent v2 sample and agent-creation utility
+- **Model Quickstart**: Direct Voice Live model integration with proactive greetings
 - **Basic Web Voice Assistant**: Browser-based voice assistant with real-time streaming and barge-in support
 - **Voice Live Avatar**: Avatar-enabled voice conversations with Docker deployment
 - **Voice Live Car Demo**: Voice-Enabled Car Assistant powered by multiple architectures
@@ -72,8 +76,20 @@ JavaScript/TypeScript samples showcasing:
 
 ### [Java Samples](./java/)
 Java samples  showcasing:
+- **Agents New Quickstart**: Voice Live + Foundry Agent v2 sample and agent-creation utility
 - **Model Quickstart**: Direct model access with flexible authentication
 - Built with Java 11+ and Maven
+
+### [Voice Live Universal Assistant](./voice-live-universal-assistant/)
+Full-stack web application with a **shared React+Vite+TypeScript frontend** and per-language backend implementations:
+- **Shared frontend**: Fluent-aligned design system (light/dark/system themes), voice orb visualization, CC transcript, voice type selection (OpenAI + Azure Standard)
+- **Python backend**: FastAPI + WebSocket proxy with Agent and Model mode support
+- **Java backend**: Spring Boot + WebSocket proxy with Agent and Model mode support
+- **JavaScript, C# backends**: Planned
+- **Backend selection**: Set `BACKEND_LANGUAGE` at deploy time (`python`, `java`, `javascript`, `csharp`) — frontend is shared and language-agnostic
+- **Connection modes**: Model mode (default — works with just a Foundry endpoint) or Agent mode (auto-set when deploying with `CREATE_AGENT=true`)
+- **Azure deployment**: Full `azd up` infrastructure with Bicep IaC — Container Apps, ACR, RBAC, optional AI Foundry provisioning, and optional Foundry Agent creation with GPT-4.1-mini
+- 91 unit tests + E2E audio test
 
 Each language folder contains detailed setup instructions, configuration examples, and troubleshooting guides specific to that language and platform.
 

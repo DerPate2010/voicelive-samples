@@ -6,6 +6,33 @@ This folder contains JavaScript samples demonstrating how to build real-time voi
 
 ## Available Samples
 
+### [Agents New Quickstart](./voice-live-quickstarts/AgentsNewQuickstart/)
+
+A Node.js quickstart demonstrating the Voice Live + Foundry Agent v2 flow, including agent creation and voice assistant runtime samples.
+
+**Key Features:**
+- Agent creation utility with Voice Live metadata
+- Voice Live session targetting Foundry agents
+- Proactive greeting (LLM-generated or pre-defined)
+- Explicit microphone device selection
+- Barge-in handling and conversation logging
+
+### [Model Quickstart](./voice-live-quickstarts/ModelQuickstart/)
+
+A Node.js quickstart demonstrating direct Voice Live model integration without Foundry agent orchestration.
+
+**Key Features:**
+- Direct model-mode session (`gpt-realtime` by default)
+- Custom instructions and voice configuration
+- API key or Azure credential authentication
+- Proactive greeting (LLM-generated or pre-defined)
+- Explicit microphone device selection
+- Barge-in handling and conversation logging
+
+### [Helper Scripts](./voice-live-quickstarts/helper-scripts/)
+
+Shared PowerShell scripts for setting up and verifying Windows development prerequisites (Node.js, SoX, VS Build Tools).
+
 ### [Basic Web Voice Assistant](./basic-web-voice-assistant/)
 
 A browser-based voice assistant demonstrating Azure Voice Live SDK integration in a web application using TypeScript and the Web Audio API.
@@ -45,7 +72,7 @@ A React + Vite demo showcasing a Voice-Enabled Car Assistant powered by Azure Op
 - Real-time EV driving cycle simulation
 - Latency and token usage benchmarking
 
-### [Voice Live Interpreter Demo](./voicelive-interpretator-demo/)
+### [Voice Live Interpreter Demo](./voice-live-interpreter-demo/)
 
 A minimal Vite + React + TypeScript demo that uses **Azure Voice Live** for real-time speech translation.
 
@@ -82,6 +109,8 @@ All samples require:
 
 | Sample | Requirements |
 |--------|--------------|
+| Agents New Quickstart | [Node.js 18+](https://nodejs.org/) with npm |
+| Model Quickstart | [Node.js 18+](https://nodejs.org/) with npm |
 | Basic Web Voice Assistant | [Node.js 18+](https://nodejs.org/) with npm |
 | Voice Live Avatar | [Docker](https://www.docker.com/get-started) |
 | Voice Live Car Demo | [Node.js 18+](https://nodejs.org/) with npm |
@@ -96,7 +125,6 @@ See individual sample READMEs for detailed setup instructions.
 
 - [Azure AI Speech - Voice Live Documentation](https://learn.microsoft.com/azure/ai-services/speech-service/voice-live)
 - [Support Guide](../SUPPORT.md)
-
 ## See Also
 
 - [C# Samples](../csharp/README.md) - .NET implementation
