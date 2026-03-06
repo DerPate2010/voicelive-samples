@@ -129,6 +129,4 @@ docker run -p 8000:8000 --env-file csharp/.env voicelive-csharp
 
 ## Known Issues
 
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for SDK feature gaps and workarounds.
-
-> **Important:** The C# SDK service version is pinned to `V2026_01_01_PREVIEW` via `VoiceLiveClientOptions` — required for agent mode and all preview features. The `InterimResponse` frontend setting is currently ignored because `VoiceLiveSessionOptions` does not yet expose it as a strongly-typed property.
+No known issues at this time.
