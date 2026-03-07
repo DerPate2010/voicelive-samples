@@ -272,6 +272,7 @@ class BasicVoiceAssistant : IDisposable
         };
         interimConfig.Triggers.Add(InterimResponseTrigger.Tool);
         interimConfig.Triggers.Add(InterimResponseTrigger.Latency);
+        interimConfig.LatencyThresholdMs = 100;
 
         var options = new VoiceLiveSessionOptions
         {
