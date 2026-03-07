@@ -1,6 +1,6 @@
 # Voice Live Universal Assistant — C# Backend
 
-ASP.NET Core backend for the Voice Live Universal Assistant, implementing the same WebSocket API contract as the [Python](../python/) and [Java](../java/) backends using the [`Azure.AI.VoiceLive`](https://www.nuget.org/packages/Azure.AI.VoiceLive) .NET SDK (1.1.0-beta.2).
+ASP.NET Core backend for the Voice Live Universal Assistant, implementing the same WebSocket API contract as the [Python](../python/) and [Java](../java/) backends using the [`Azure.AI.VoiceLive`](https://www.nuget.org/packages/Azure.AI.VoiceLive) .NET SDK (1.1.0-beta.3).
 
 ## Prerequisites
 
