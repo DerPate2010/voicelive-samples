@@ -34,6 +34,7 @@ from azure.ai.voicelive.models import (
     ToolChoiceLiteral,
     VideoCrop,
     VideoParams,
+    VideoResolution,
 )
 
 logger = logging.getLogger(__name__)
@@ -299,7 +300,7 @@ class VoiceSessionHandler:
             character = avatar_name
             style = None
         elif is_photo:
-            photo_name = config.get("photoAvatarName", "Anika")
+            photo_name = config.get("avatarName", "Anika")
             parts = photo_name.split("-", 1)
             character = parts[0].lower() if parts else photo_name.lower()
             style = parts[1] if len(parts) > 1 else None
@@ -318,8 +319,12 @@ class VoiceSessionHandler:
         if background_url:
             background = Background(image_url=background_url)
 
+        video_resolution = VideoResolution(width=1920, height=1080)
+
         video = VideoParams(
             codec="h264",
+            resolution=video_resolution,
+            bitrate=500000 if is_photo else 1000000,
             crop=video_crop,
             background=background,
         )
