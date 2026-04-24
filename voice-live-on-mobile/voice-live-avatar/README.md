@@ -39,6 +39,8 @@ Then open your web browser and navigate to [http://localhost:3000](http://localh
 
 * Step 1: Under the `Connection Settings` section, fill `Azure AI Services Endpoint` and `Subscription Key`, which can be obtained from the `Keys and Endpoint` tab in your Azure AI Services resource. The endpoint can be the regional endpoint (e.g., `https://<region>.api.cognitive.microsoft.com/`) or a custom domain endpoint (e.g., `https://<custom-domain>.cognitiveservices.azure.com/`).
 
+* Alternative for middleware testing: Switch `Connection Route` to `Via existing middleware` and enter the base URL of a running Voice Live middleware instance, for example the Python middleware from the `voice-live-universal-assistant` sample. In this mode, the browser no longer connects directly to Voice Live; audio and text go through the middleware instead.
+
 * Step 2: Under `Conversation Settings` section, configure the avatar:
   - **Enable Avatar**: Toggle the `Avatar` switch to enable the avatar feature.
   - **Avatar Type**: By default, a prebuilt avatar is used. Select a character from the `Avatar` dropdown list.
@@ -47,6 +49,8 @@ Then open your web browser and navigate to [http://localhost:3000](http://localh
   - **Avatar Output Mode**: Choose between `WebRTC` (default, real-time streaming) and `WebSocket` (streams video data over the WebSocket connection).
   - **Avatar Background Image URL** *(optional)*: Enter a URL to set a custom background image for the avatar.
   - **Scene Settings** *(photo avatar only)*: When using a photo avatar, adjust scene parameters such as `Zoom`, `Position X/Y`, `Rotation X/Y/Z`, and `Amplitude`. These settings can also be adjusted live after connecting.
+
+* Middleware limitation: When `Via existing middleware` is selected, video avatar rendering is disabled on purpose. This route is intended for comparing the direct Voice Live connection with the middleware-backed audio/text flow.
 
 * Step 3: Click `Connect` button to start the conversation. Once connected, you should see the avatar appearing on the page, and you can click `Turn on microphone` and start talking with the avatar with speech.
 

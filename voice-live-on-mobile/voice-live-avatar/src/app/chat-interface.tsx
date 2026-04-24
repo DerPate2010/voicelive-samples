@@ -181,6 +181,79 @@ interface FoundryAgentCallEvent {
   agent_response_id?: string;
 }
 
+type ConnectionTransport = VoiceUIConnectionConfig["connectionTransport"];
+
+interface MiddlewareServerMessage {
+  type: "session_started" | "session_stopped" | "audio_data" | "transcript" | "status" | "stop_playback" | "error";
+  session_id?: string;
+  data?: string;
+  role?: "user" | "assistant";
+  text?: string;
+  isFinal?: boolean;
+  is_final?: boolean;
+  state?: string;
+  message?: string;
+}
+
+function createClientId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function encodeChunkToBase64(chunk: Uint8Array): string {
+  let binary = "";
+  for (let index = 0; index < chunk.length; index += 1) {
+    binary += String.fromCharCode(chunk[index]);
+  }
+  return btoa(binary);
+}
+
+function decodeBase64Chunk(data: string): Uint8Array {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function buildMiddlewareWebSocketUrl(baseUrl: string, clientId: string): string {
+  const url = new URL(baseUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const basePath = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
+  url.pathname = `${basePath}/ws/${clientId}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function mapTurnDetectionToVadType(turnDetection: TurnDetection | null): "server" | "azure_semantic" {
+  if (turnDetection?.type === "azure_semantic_vad") {
+    return "azure_semantic";
+  }
+
+  return "server";
+}
+
+function resolveMiddlewareVoiceType(voice: string): "openai" | "azure-standard" {
+  return voice.includes("-") || voice.includes(":") ? "azure-standard" : "openai";
+}
+
+function resolveMiddlewareVoiceName(config: VoiceUIConnectionConfig): string {
+  if (config.voiceType === "standard") {
+    return config.voiceName;
+  }
+
+  return config.customVoiceName || config.personalVoiceName || config.voiceName;
+}
+
 function isFoundryAgentCallItem(item: unknown): item is FoundryAgentCallItem {
   return typeof item === "object" && item !== null && (item as Record<string, unknown>).type === "foundry_agent_call";
 }
@@ -706,6 +779,8 @@ const ChatInterface = ({
 
   // Add mode state and agent fields
   const [mode, setMode] = useState<"model" | "agent">("model");
+  const [connectionTransport, setConnectionTransport] = useState<ConnectionTransport>("direct");
+  const [middlewareBaseUrl, setMiddlewareBaseUrl] = useState("");
   const [agentProjectName, setAgentProjectName] = useState("");
   const [agentName, setAgentName] = useState("");
   const [agentVersion, setAgentVersion] = useState("");
@@ -728,6 +803,8 @@ const ChatInterface = ({
   const clientRef = useRef<VoiceLiveClient | null>(null);
   const sessionRef = useRef<VoiceLiveSession | null>(null);
   const subscriptionRef = useRef<VoiceLiveSubscription | null>(null);
+  const middlewareSocketRef = useRef<WebSocket | null>(null);
+  const middlewareClientIdRef = useRef<string>(createClientId());
   const audioHandlerRef = useRef<AudioHandler | null>(null);
   const proactiveManagerRef = useRef<ProactiveEventManager | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
@@ -751,6 +828,14 @@ const ChatInterface = ({
   useEffect(() => {
     avatarOutputModeRef.current = avatarOutputMode;
   }, [avatarOutputMode]);
+
+  useEffect(() => {
+    if (connectionTransport === "middleware" && isAvatar) {
+      setIsAvatar(false);
+      setIsPhotoAvatar(false);
+      setIsCustomAvatar(false);
+    }
+  }, [connectionTransport, isAvatar]);
 
   // Default instructions for foundry agent tools
   const defaultFoundryInstructions = "You are a helpful assistant with tools. Please response a short message like 'I am working on this', 'getting the information for you, please wait' before calling the function. The response can be varied based on the question.";
@@ -1174,6 +1259,11 @@ const ChatInterface = ({
       try {
         setIsConnecting(true);
 
+        if (connectionConfig.connectionTransport === "middleware") {
+          await connectWithMiddleware(connectionConfig);
+          return;
+        }
+
         // Refresh the token before connecting
         if (configLoaded) {
           try {
@@ -1390,7 +1480,7 @@ const ChatInterface = ({
           turnDetection: turnDetectionConfig,
           voice: voiceConfig,
           avatar: avatarConfig,
-          tools: allTools.length > 0 ? allTools : undefined,
+          tools: allTools.length > 0 ? (allTools as any) : undefined,
           // Temperature is not supported in agent mode (configured in agent definition)
           temperature:
             connectionConfig.mode === "agent" ? undefined : connectionConfig.temperature,
@@ -1755,7 +1845,209 @@ const ChatInterface = ({
     }
   }, [isConnected, isAvatar, isPhotoAvatar, isCustomAvatar, customAvatarName, photoAvatarName, sceneZoom, scenePositionX, scenePositionY, sceneRotationX, sceneRotationY, sceneRotationZ, sceneAmplitude]);
 
+  const sendMiddlewareMessage = (type: string, data: Record<string, unknown> = {}) => {
+    if (middlewareSocketRef.current?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    middlewareSocketRef.current.send(JSON.stringify({ type, ...data }));
+  };
+
+  const connectWithMiddleware = async (connectionConfig: VoiceUIConnectionConfig) => {
+    if (!connectionConfig.middlewareBaseUrl.trim()) {
+      throw new Error("Please set a middleware base URL.");
+    }
+
+    if (connectionConfig.isAvatar) {
+      throw new Error("Middleware mode does not support video avatars.");
+    }
+
+    if (connectionConfig.voiceType !== "standard") {
+      throw new Error("Middleware mode currently supports standard voices only.");
+    }
+
+    if (!audioHandlerRef.current) {
+      audioHandlerRef.current = new AudioHandler();
+      await audioHandlerRef.current.initialize();
+    }
+
+    const voiceName = resolveMiddlewareVoiceName(connectionConfig);
+    const wsUrl = buildMiddlewareWebSocketUrl(
+      connectionConfig.middlewareBaseUrl,
+      middlewareClientIdRef.current,
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const ws = new WebSocket(wsUrl);
+      middlewareSocketRef.current = ws;
+
+      const fail = (error: Error) => {
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
+      };
+
+      const finish = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: "start_session",
+          mode: connectionConfig.mode,
+          model: connectionConfig.model,
+          voice: voiceName,
+          voice_type: resolveMiddlewareVoiceType(voiceName),
+          vad_type: mapTurnDetectionToVadType(connectionConfig.turnDetectionType),
+          noise_reduction: connectionConfig.useNS,
+          echo_cancellation: connectionConfig.useEC,
+          transcribe_model: connectionConfig.srModel,
+          input_language:
+            connectionConfig.recognitionLanguage === "auto"
+              ? ""
+              : connectionConfig.recognitionLanguage,
+          instructions: connectionConfig.instructions,
+          temperature: connectionConfig.temperature,
+          proactive_greeting: connectionConfig.enableProactive,
+          interim_response: connectionConfig.interimResponseEnabled,
+          interim_response_type:
+            connectionConfig.interimResponseType === "static_interim_response"
+              ? "static"
+              : "llm",
+          interim_trigger_tool: connectionConfig.interimResponseTriggers.includes("tool"),
+          interim_trigger_latency: connectionConfig.interimResponseTriggers.includes("latency"),
+          interim_latency_ms: connectionConfig.interimResponseLatencyThreshold,
+          interim_instructions: connectionConfig.interimResponseInstructions,
+          interim_static_texts: connectionConfig.interimResponseTexts,
+          agent_name: connectionConfig.mode === "agent" ? connectionConfig.agentName : undefined,
+          project: connectionConfig.mode === "agent" ? connectionConfig.agentProjectName : undefined,
+          agent_version: connectionConfig.mode === "agent" ? connectionConfig.agentVersion : undefined,
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data) as MiddlewareServerMessage;
+
+          switch (message.type) {
+            case "session_started":
+              setSessionId(message.session_id || "");
+              setIsConnected(true);
+              setMessages((prevMessages) => [
+                ...prevMessages,
+                {
+                  type: "status",
+                  content: `Session started via middleware. debug id: ${message.session_id || "connecting..."}`,
+                },
+              ]);
+              audioHandlerRef.current?.startSessionRecording();
+              finish();
+              break;
+
+            case "audio_data":
+              if (message.data) {
+                if (audioHandlerRef.current?.isPlaying === false) {
+                  audioHandlerRef.current.startStreamingPlayback();
+                }
+
+                audioHandlerRef.current?.playChunk(
+                  decodeBase64Chunk(message.data),
+                  async () => Promise.resolve(),
+                );
+              }
+              break;
+
+            case "transcript":
+              if (message.text) {
+                const transcriptText = message.text;
+                setMessages((prevMessages) => [
+                  ...prevMessages,
+                  {
+                    type: message.role === "user" ? "user" : "assistant",
+                    content: transcriptText,
+                  },
+                ]);
+              }
+              break;
+
+            case "status":
+              if (message.state) {
+                setMessages((prevMessages) => [
+                  ...prevMessages,
+                  {
+                    type: "status",
+                    content: `Middleware status: ${message.state}`,
+                  },
+                ]);
+              }
+              break;
+
+            case "stop_playback":
+              audioHandlerRef.current?.stopStreamingPlayback();
+              break;
+
+            case "session_stopped":
+              setIsConnected(false);
+              break;
+
+            case "error":
+              fail(new Error(message.message || "Middleware session failed."));
+              setMessages((prevMessages) => [
+                ...prevMessages,
+                {
+                  type: "error",
+                  content: message.message || "Middleware session failed.",
+                },
+              ]);
+              break;
+
+            default:
+              break;
+          }
+        } catch (error) {
+          console.error("Failed to process middleware message:", error);
+        }
+      };
+
+      ws.onerror = () => {
+        fail(new Error("Middleware WebSocket connection failed."));
+      };
+
+      ws.onclose = () => {
+        middlewareSocketRef.current = null;
+        if (isRecording) {
+          audioHandlerRef.current?.stopRecording();
+          setIsRecording(false);
+        }
+        audioHandlerRef.current?.stopStreamingPlayback();
+        audioHandlerRef.current?.stopRecordAnimation();
+        audioHandlerRef.current?.stopPlayChunkAnimation();
+        if (audioHandlerRef.current) {
+          audioHandlerRef.current.stopSessionRecording();
+          setHasRecording(audioHandlerRef.current.hasRecordedAudio());
+        }
+        setIsConnected(false);
+      };
+    });
+  };
+
   const disconnect = async () => {
+    if (middlewareSocketRef.current) {
+      try {
+        sendMiddlewareMessage("stop_session");
+        middlewareSocketRef.current.close();
+      } catch (error) {
+        console.error("Error disconnecting middleware session:", error);
+      }
+      middlewareSocketRef.current = null;
+      middlewareClientIdRef.current = createClientId();
+    }
+
     // Unsubscribe from events first
     if (subscriptionRef.current) {
       await subscriptionRef.current.close();
@@ -1773,7 +2065,7 @@ const ChatInterface = ({
     }
 
     // Clear the client reference (VoiceLiveClient doesn't need explicit dispose)
-    if (clientRef.current) {
+    if (clientRef.current || connectionTransport === "middleware") {
       try {
         clientRef.current = null;
         peerConnection = null as unknown as RTCPeerConnection;
@@ -1871,20 +2163,33 @@ const ChatInterface = ({
   };
 
   const sendMessage = async () => {
-    if (currentMessage.trim() && sessionRef.current) {
+    if (!currentMessage.trim()) {
+      return;
+    }
+
+    const temporaryStorageMessage = currentMessage;
+    setCurrentMessage("");
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      {
+        type: "user",
+        content: temporaryStorageMessage,
+      },
+    ]);
+    referenceText.current = temporaryStorageMessage;
+
+    if (connectionTransport === "middleware") {
       try {
-        const temporaryStorageMessage = currentMessage;
-        setCurrentMessage("");
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          {
-            type: "user",
-            content: temporaryStorageMessage,
-          },
-        ]);
-        referenceText.current = temporaryStorageMessage;
+        sendMiddlewareMessage("send_text", { text: temporaryStorageMessage });
+      } catch (error) {
+        console.error("Failed to send message:", error);
+      }
 
+      return;
+    }
 
+    if (sessionRef.current) {
+      try {
         await sessionRef.current.addConversationItem({
           type: "message",
           role: "user",
@@ -2006,7 +2311,7 @@ const ChatInterface = ({
   }
 
   const toggleRecording = async () => {
-    if (!isRecording && sessionRef.current) {
+    if (!isRecording && (sessionRef.current || middlewareSocketRef.current?.readyState === WebSocket.OPEN)) {
       try {
         if (!startRecordingTimestamp.current) {
           startRecordingTimestamp.current = Date.now();
@@ -2020,7 +2325,11 @@ const ChatInterface = ({
         }
         await audioHandlerRef.current.startRecording(async (chunk) => {
           cacheAudioChunksForPA(chunk);
-          await sessionRef.current?.sendAudio(chunk);
+          if (connectionTransport === "middleware") {
+            sendMiddlewareMessage("audio_chunk", { data: encodeChunkToBase64(chunk) });
+          } else {
+            await sessionRef.current?.sendAudio(chunk);
+          }
           if (isUserSpeaking.current) {
             proactiveManagerRef.current?.updateActivity("user speaking");
           }
@@ -2034,7 +2343,7 @@ const ChatInterface = ({
         audioHandlerRef.current.stopRecording();
         audioHandlerRef.current.stopRecordAnimation();
         lastPauseTimestamp.current = Date.now();
-        if (turnDetectionType === null) {
+        if (connectionTransport !== "middleware" && turnDetectionType === null) {
           // Commit audio buffer and request response for manual turn detection
           await sessionRef.current?.sendEvent({ type: "input_audio_buffer.commit" });
           proactiveManagerRef.current?.updateActivity("user speaking");
@@ -2556,6 +2865,8 @@ const ChatInterface = ({
   };
 
   const buildConnectionConfig = (): VoiceUIConnectionConfig => ({
+    connectionTransport,
+    middlewareBaseUrl,
     apiKey,
     endpoint,
     entraToken,
@@ -2610,7 +2921,7 @@ const ChatInterface = ({
     agentVersion,
     interimResponseEnabled,
     interimResponseType,
-    interimResponseTriggers: [...interimResponseTriggers],
+    interimResponseTriggers: [...interimResponseTriggers] as VoiceUIConnectionConfig["interimResponseTriggers"],
     interimResponseLatencyThreshold,
     interimResponseTexts,
     interimResponseModel,
@@ -2651,6 +2962,12 @@ const ChatInterface = ({
   };
 
   const applyConnectionConfig = (config: Partial<VoiceUIConnectionConfig>) => {
+    if (config.connectionTransport !== undefined) {
+      setConnectionTransport(config.connectionTransport);
+    }
+    if (config.middlewareBaseUrl !== undefined) {
+      setMiddlewareBaseUrl(config.middlewareBaseUrl);
+    }
     if (config.apiKey !== undefined) setApiKey(config.apiKey);
     if (config.endpoint !== undefined) setEndpoint(config.endpoint);
     if (config.entraToken !== undefined) setEntraToken(config.entraToken);
@@ -2694,7 +3011,7 @@ const ChatInterface = ({
     }
     if (config.voiceDeploymentId !== undefined) setVoiceDeploymentId(config.voiceDeploymentId);
     if (config.tools !== undefined) {
-      setTools(config.tools as (ToolDeclaration | SystemToolDeclaration)[]);
+      setTools(config.tools as unknown as (ToolDeclaration | SystemToolDeclaration)[]);
     }
     if (config.mcpServers !== undefined) setMcpServers(config.mcpServers);
     if (config.foundryAgentTools !== undefined) {
@@ -2758,6 +3075,8 @@ const ChatInterface = ({
     onConfigChange(buildConnectionConfig());
   }, [
     onConfigChange,
+    connectionTransport,
+    middlewareBaseUrl,
     apiKey,
     endpoint,
     entraToken,
@@ -2891,6 +3210,27 @@ const ChatInterface = ({
                 Connection Settings
               </AccordionTrigger>
               <AccordionContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Connection Route</label>
+                  <Select
+                    value={connectionTransport}
+                    onValueChange={(value) => {
+                      setConnectionTransport(value as ConnectionTransport);
+                      if (value === "middleware") {
+                        setIsAvatar(false);
+                      }
+                    }}
+                    disabled={isConnected}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="direct">Direct to Voice Live API</SelectItem>
+                      <SelectItem value="middleware">Via existing middleware</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 {/* Mode Switch */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Mode</label>
@@ -2908,46 +3248,61 @@ const ChatInterface = ({
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Always show endpoint and subscription key */}
-                <Input
-                  placeholder="Azure AI Services Endpoint"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                  disabled={isConnected || configLoaded}
-                />
-                {(!configLoaded || mode === "agent") && (
+                {connectionTransport === "middleware" ? (
                   <>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Authentication</label>
-                      <Select
-                        value={authType}
-                        onValueChange={(v) => setAuthType(v as "apiKey" | "entraToken")}
-                        disabled={isConnected}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="apiKey">API Key</SelectItem>
-                          <SelectItem value="entraToken">Entra ID Token</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {authType === "entraToken" ? (
-                      <Input
-                        placeholder="Entra Token"
-                        value={entraToken}
-                        onChange={(e) => setEntraToken(e.target.value)}
-                        disabled={isConnected}
-                      />
-                    ) : (
-                      <Input
-                        type="password"
-                        placeholder="Subscription Key"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        disabled={isConnected}
-                      />
+                    <Input
+                      placeholder="Middleware Base URL, e.g. http://localhost:8000"
+                      value={middlewareBaseUrl}
+                      onChange={(e) => setMiddlewareBaseUrl(e.target.value)}
+                      disabled={isConnected}
+                    />
+                    <p className="text-xs text-gray-500">
+                      The middleware keeps Voice Live credentials on the server. Audio and text work in this mode; avatar video is disabled.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      placeholder="Azure AI Services Endpoint"
+                      value={endpoint}
+                      onChange={(e) => setEndpoint(e.target.value)}
+                      disabled={isConnected || configLoaded}
+                    />
+                    {(!configLoaded || mode === "agent") && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Authentication</label>
+                          <Select
+                            value={authType}
+                            onValueChange={(v) => setAuthType(v as "apiKey" | "entraToken")}
+                            disabled={isConnected}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="apiKey">API Key</SelectItem>
+                              <SelectItem value="entraToken">Entra ID Token</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {authType === "entraToken" ? (
+                          <Input
+                            placeholder="Entra Token"
+                            value={entraToken}
+                            onChange={(e) => setEntraToken(e.target.value)}
+                            disabled={isConnected}
+                          />
+                        ) : (
+                          <Input
+                            type="password"
+                            placeholder="Subscription Key"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            disabled={isConnected}
+                          />
+                        )}
+                      </>
                     )}
                   </>
                 )}
@@ -4256,7 +4611,7 @@ const ChatInterface = ({
                         onCheckedChange={(checked: boolean) =>
                           setIsAvatar(checked)
                         }
-                        disabled={isConnected}
+                        disabled={isConnected || connectionTransport === "middleware"}
                       />
                     </div>
                     {isAvatar && (
@@ -4269,12 +4624,17 @@ const ChatInterface = ({
                           onCheckedChange={(checked: boolean) => {
                             setIsPhotoAvatar(checked);
                           }}
-                          disabled={isConnected}
+                          disabled={isConnected || connectionTransport === "middleware"}
                         />
                       </div>
                     )}
                   </div>
                 </div>
+                {connectionTransport === "middleware" && (
+                  <p className="text-xs text-gray-500">
+                    Middleware mode reuses the Universal Assistant WebSocket proxy. Video avatars are intentionally not available here.
+                  </p>
+                )}
                 {isAvatar && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Avatar Output Mode</label>
@@ -4308,7 +4668,7 @@ const ChatInterface = ({
                           onCheckedChange={(checked: boolean) =>
                             setIsCustomAvatar(checked)
                           }
-                          disabled={isConnected}
+                          disabled={isConnected || connectionTransport === "middleware"}
                         />
                       </div>
                     )}

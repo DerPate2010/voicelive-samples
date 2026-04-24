@@ -16,6 +16,8 @@ export interface VoiceUIFoundryAgentToolConfig {
 }
 
 export interface VoiceUIConnectionConfig {
+  connectionTransport: "direct" | "middleware";
+  middlewareBaseUrl: string;
   apiKey: string;
   endpoint: string;
   entraToken: string;
