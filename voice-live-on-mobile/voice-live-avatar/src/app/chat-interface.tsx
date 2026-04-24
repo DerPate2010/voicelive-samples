@@ -54,6 +54,7 @@ import {
 } from "@azure/ai-voicelive";
 import { AzureKeyCredential, TokenCredential } from "@azure/core-auth";
 import { SearchClient } from "@azure/search-documents";
+import type { VoiceUIConnectionConfig } from "@/lib/voice-ui-config";
 import "./index.css";
 import {
   clearChatSvg,
@@ -589,7 +590,23 @@ const photoAvatarNames = [
 
 let intervalId: NodeJS.Timeout | null = null;
 
-const ChatInterface = () => {
+interface ChatInterfaceProps {
+  showConfigurationPanel?: boolean;
+  showVoiceUi?: boolean;
+  registerWindowApi?: boolean;
+  initialConfig?: Partial<VoiceUIConnectionConfig>;
+  onConfigChange?: (config: VoiceUIConnectionConfig) => void;
+  onConnectRequest?: (config: VoiceUIConnectionConfig) => Promise<void> | void;
+}
+
+const ChatInterface = ({
+  showConfigurationPanel = true,
+  showVoiceUi = true,
+  registerWindowApi = true,
+  initialConfig,
+  onConfigChange,
+  onConnectRequest,
+}: ChatInterfaceProps) => {
   const [apiKey, setApiKey] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [entraToken, setEntraToken] = useState("");
@@ -726,6 +743,7 @@ const ChatInterface = () => {
   const settingsRef = useRef<HTMLDivElement>(null);
   // Track current streaming message for real-time updates
   const currentStreamingMessageRef = useRef<{ id: string; content: string } | null>(null);
+  const initialConfigAppliedRef = useRef(false);
 
   const isEnableAvatar = isAvatar && (avatarName || photoAvatarName || customAvatarName);
 
@@ -772,22 +790,26 @@ const ChatInterface = () => {
         }
 
         const config = await response.json();
-        if (config.endpoint) {
+        if (config.endpoint && initialConfig?.endpoint === undefined) {
           setEndpoint(config.endpoint);
         }
-        if (config.token) {
+        if (config.token && initialConfig?.entraToken === undefined) {
           setEntraToken(config.token);
         }
         if (config.pre_defined_scenarios) {
           setPredefinedScenarios(config.pre_defined_scenarios);
         }
         // Parse agent configs from /config
-        if (config.agent && config.agent.project_name) {
+        if (config.agent && config.agent.project_name && initialConfig?.agentProjectName === undefined) {
           setAgentProjectName(config.agent.project_name);
         }
         if (config.agent && Array.isArray(config.agent.agents)) {
           setAgents(config.agent.agents);
-          if (config.agent.agents.length > 0 && !agentName) {
+          if (
+            config.agent.agents.length > 0 &&
+            !agentName &&
+            initialConfig?.agentName === undefined
+          ) {
             setAgentName(config.agent.agents[0].name);
             setAgentVersion(config.agent.agents[0].version);
           }
@@ -1143,8 +1165,12 @@ const ChatInterface = () => {
     });
   };
 
-  const handleConnect = async () => {
-    if (!isConnected) {
+  const handleConnect = async (
+    overrides?: Partial<VoiceUIConnectionConfig>,
+    options?: { forceConnect?: boolean }
+  ) => {
+    if (!isConnected || options?.forceConnect) {
+      let connectionConfig = resolveConnectionConfig(overrides);
       try {
         setIsConnecting(true);
 
@@ -1156,9 +1182,17 @@ const ChatInterface = () => {
               const config = await response.json();
               if (config.endpoint) {
                 setEndpoint(config.endpoint);
+                connectionConfig = {
+                  ...connectionConfig,
+                  endpoint: config.endpoint,
+                };
               }
               if (config.token) {
                 setEntraToken(config.token);
+                connectionConfig = {
+                  ...connectionConfig,
+                  entraToken: config.token,
+                };
               }
             }
           } catch (error) {
@@ -1168,16 +1202,19 @@ const ChatInterface = () => {
         }
 
         // Set up credentials for the new SDK
-        credentialRef.current = entraToken
+        credentialRef.current = connectionConfig.entraToken
           ? {
               getToken: async () => ({
-                token: entraToken,
+                token: connectionConfig.entraToken,
                 expiresOnTimestamp: Date.now() + 3600000,
               }),
             }
-          : new AzureKeyCredential(apiKey);
+          : new AzureKeyCredential(connectionConfig.apiKey);
 
-        if (mode === "agent" && (!agentName || !agentProjectName)) {
+        if (
+          connectionConfig.mode === "agent" &&
+          (!connectionConfig.agentName || !connectionConfig.agentProjectName)
+        ) {
           setMessages((prevMessages) => [
             ...prevMessages,
             {
@@ -1190,7 +1227,7 @@ const ChatInterface = () => {
 
         // Create VoiceLiveClient with apiVersion option
         // Build effective endpoint with query parameters
-        const endpointUrl = new URL(endpoint);
+        const endpointUrl = new URL(connectionConfig.endpoint);
         endpointUrl.searchParams.set("debug", "on");
         if (profile) {
           endpointUrl.searchParams.set("profile", profile);
@@ -1200,15 +1237,15 @@ const ChatInterface = () => {
         });
 
         // Start session with model or agent SessionTarget
-        if (mode === "agent") {
+        if (connectionConfig.mode === "agent") {
           const agentConfig: AgentSessionConfig = {
-            agentName: agentName,
-            projectName: agentProjectName,
-            agentVersion: agentVersion || undefined,
+            agentName: connectionConfig.agentName,
+            projectName: connectionConfig.agentProjectName,
+            agentVersion: connectionConfig.agentVersion || undefined,
           };
           sessionRef.current = await clientRef.current.startSession({ agent: agentConfig });
         } else {
-          sessionRef.current = await clientRef.current.startSession(model);
+          sessionRef.current = await clientRef.current.startSession(connectionConfig.model);
         }
 
         // Monkey-patch the session to intercept raw messages for response.video.delta
@@ -1245,80 +1282,84 @@ const ChatInterface = () => {
 
         // Build turn detection config
 
-        const turnDetectionConfig: any = turnDetectionType ? { ...turnDetectionType } : undefined;
+        const turnDetectionConfig: any = connectionConfig.turnDetectionType
+          ? { ...connectionConfig.turnDetectionType }
+          : undefined;
         if (
           turnDetectionConfig &&
-          eouDetectionType !== "none" &&
-          isCascaded(mode, model)
+          connectionConfig.eouDetectionType !== "none" &&
+          isCascaded(connectionConfig.mode, connectionConfig.model)
         ) {
           turnDetectionConfig.endOfUtteranceDetection = {
-            model: eouDetectionType,
+            model: connectionConfig.eouDetectionType,
           };
         }
         // Build voice config for the new SDK
 
-        const voiceConfig: any = voiceType === "avatar-voice-sync"
+        const voiceConfig: any = connectionConfig.voiceType === "avatar-voice-sync"
           ? {
               type: "avatar-voice-sync",
-              model: avatarVoiceSyncModel,
-              temperature: voiceTemperature,
+              model: connectionConfig.avatarVoiceSyncModel,
+              temperature: connectionConfig.voiceTemperature,
             }
-          : voiceType === "azure-realtime-native"
-          ? { name: voiceName || "ava", type: "azure-realtime-native" }
-          : voiceType === "custom"
+          : connectionConfig.voiceType === "azure-realtime-native"
+          ? { name: connectionConfig.voiceName || "ava", type: "azure-realtime-native" }
+          : connectionConfig.voiceType === "custom"
           ? {
-              name: customVoiceName,
-              endpointId: voiceDeploymentId,
-              temperature: customVoiceName.toLowerCase().includes("dragonhd")
-                ? voiceTemperature
+              name: connectionConfig.customVoiceName,
+              endpointId: connectionConfig.voiceDeploymentId,
+              temperature: connectionConfig.customVoiceName.toLowerCase().includes("dragonhd")
+                ? connectionConfig.voiceTemperature
                 : undefined,
-              rate: voiceSpeed.toString(),
+              rate: connectionConfig.voiceSpeed.toString(),
               type: "azure-custom",
             }
-          : voiceType === "personal"
+          : connectionConfig.voiceType === "personal"
             ? {
-                name: personalVoiceName,
+                name: connectionConfig.personalVoiceName,
                 type: "azure-personal",
-                temperature: voiceTemperature,
-                model: personalVoiceModel,
+                temperature: connectionConfig.voiceTemperature,
+                model: connectionConfig.personalVoiceModel,
               }
-            : (voiceName.includes("-") || voiceName.includes(":"))
+            : (connectionConfig.voiceName.includes("-") || connectionConfig.voiceName.includes(":"))
               ? {
-                  name: voiceName,
+                  name: connectionConfig.voiceName,
                   type: "azure-standard",
-                  temperature: voiceName.toLowerCase().includes("dragonhd")
-                    ? voiceTemperature
+                  temperature: connectionConfig.voiceName.toLowerCase().includes("dragonhd")
+                    ? connectionConfig.voiceTemperature
                     : undefined,
-                  rate: voiceSpeed.toString(),
+                  rate: connectionConfig.voiceSpeed.toString(),
                 }
-              : { name: voiceName, type: "openai" };
+              : { name: connectionConfig.voiceName, type: "openai" };
 
-        if (enableSearch) {
+        if (connectionConfig.searchEndpoint && connectionConfig.searchIndex) {
           searchClientRef.current = new SearchClient(
-            searchEndpoint,
-            searchIndex,
-            new AzureKeyCredential(searchApiKey)
+            connectionConfig.searchEndpoint,
+            connectionConfig.searchIndex,
+            new AzureKeyCredential(connectionConfig.searchApiKey)
           );
         }
         // Set default instructions if foundry agent tools are configured
-        const effectiveInstructions = foundryAgentTools.length > 0 && (!instructions || instructions.length === 0)
+        const effectiveInstructions =
+          connectionConfig.foundryAgentTools.length > 0 &&
+          (!connectionConfig.instructions || connectionConfig.instructions.length === 0)
           ? defaultFoundryInstructions
-          : instructions;
+          : connectionConfig.instructions;
 
         // Get avatar config before updating session
-        const avatarConfig = getAvatarConfig();
+        const avatarConfig = getAvatarConfig(connectionConfig);
 
         // Build tools array - only include if there are actual tools
         const allTools = [
-          ...(tools || []),
-          ...(mcpServers || []).map((mcp) => ({
+          ...(connectionConfig.tools || []),
+          ...(connectionConfig.mcpServers || []).map((mcp) => ({
             type: "mcp" as const,
             serverUrl: mcp.serverUrl,
             authorization: mcp.authorization || undefined,
             serverLabel: mcp.serverLabel,
             requireApproval: mcp.requireApproval ? "always" : "never",
           })),
-          ...(foundryAgentTools || []).map((tool) => ({
+          ...(connectionConfig.foundryAgentTools || []).map((tool) => ({
             type: "foundry_agent" as const,
             agentName: tool.agentName,
             agentVersion: tool.agentVersion,
@@ -1332,50 +1373,60 @@ const ChatInterface = () => {
         await sessionRef.current!.updateSession({
           instructions: effectiveInstructions?.length > 0 ? effectiveInstructions : undefined,
           inputAudioTranscription: {
-            model: srModel,
+            model: connectionConfig.srModel,
             // Language cannot be configured for mai-transcribe-1 model
             language:
-              srModel === "mai-transcribe-1" ? undefined : (recognitionLanguage === "auto" ? undefined : recognitionLanguage),
-            phraseList: phraseList.length > 0 ? phraseList : undefined,
-            customSpeech: Object.keys(customSpeechModels).length > 0 ? customSpeechModels : undefined,
+              connectionConfig.srModel === "mai-transcribe-1"
+                ? undefined
+                : connectionConfig.recognitionLanguage === "auto"
+                  ? undefined
+                  : connectionConfig.recognitionLanguage,
+            phraseList: connectionConfig.phraseList.length > 0 ? connectionConfig.phraseList : undefined,
+            customSpeech:
+              Object.keys(connectionConfig.customSpeechModels).length > 0
+                ? connectionConfig.customSpeechModels
+                : undefined,
           },
           turnDetection: turnDetectionConfig,
           voice: voiceConfig,
           avatar: avatarConfig,
           tools: allTools.length > 0 ? allTools : undefined,
           // Temperature is not supported in agent mode (configured in agent definition)
-          temperature: mode === "agent" ? undefined : temperature,
+          temperature:
+            connectionConfig.mode === "agent" ? undefined : connectionConfig.temperature,
           modalities,
-          inputAudioNoiseReduction: useNS
+          inputAudioNoiseReduction: connectionConfig.useNS
             ? {
                 type: "azure_deep_noise_suppression" as const,
               }
             : undefined,
-          inputAudioEchoCancellation: useEC
+          inputAudioEchoCancellation: connectionConfig.useEC
             ? {
                 type: "server_echo_cancellation" as const,
               }
             : undefined,
-          interimResponse: interimResponseEnabled ? buildInterimResponseConfig() : undefined,
+          interimResponse: connectionConfig.interimResponseEnabled
+            ? buildInterimResponseConfig(connectionConfig)
+            : undefined,
         });
 
         // For photo avatar, send an additional session.update with scene config
         // using sendRawEvent to bypass SDK serialization which strips 'scene' property
         // Build minimal avatar config for scene - without outputProtocol, video, crop
-        if (isPhotoAvatar && avatarConfig?.scene) {
-          const sceneAvatarConfig = isCustomAvatar
+        if (connectionConfig.isPhotoAvatar && avatarConfig?.scene) {
+          const sceneAvatarConfig = connectionConfig.isCustomAvatar
             ? {
                 type: "photo-avatar",
                 model: "vasa-1",
-                character: customAvatarName,
+                character: connectionConfig.customAvatarName,
                 customized: true,
                 scene: avatarConfig.scene,
               }
             : {
                 type: "photo-avatar",
                 model: "vasa-1",
-                character: photoAvatarName.split("-")[0].toLowerCase(),
-                style: photoAvatarName.split("-").slice(1).join("-"),
+                character: connectionConfig.photoAvatarName.split("-")[0].toLowerCase(),
+                style: connectionConfig.photoAvatarName.split("-").slice(1).join("-"),
                 scene: avatarConfig.scene,
               };
           await sendRawEvent({
@@ -1387,8 +1438,8 @@ const ChatInterface = () => {
         }
 
         // Setup avatar if enabled
-        if (isAvatar && avatarConfig) {
-          if (avatarOutputMode === "webrtc") {
+        if (connectionConfig.isAvatar && avatarConfig) {
+          if (connectionConfig.avatarOutputMode === "webrtc") {
             // For WebRTC, subscribe to session.updated to get ICE servers, then initiate connection
             const iceServersPromise = new Promise<RTCIceServer[] | undefined>((resolve) => {
               const timeout = setTimeout(() => {
@@ -1440,7 +1491,7 @@ const ChatInterface = () => {
           },
         ]);
 
-        if (enableProactive) {
+        if (connectionConfig.enableProactive) {
           proactiveManagerRef.current = new ProactiveEventManager(
             whenGreeting,
             whenInactive,
@@ -1508,30 +1559,35 @@ const ChatInterface = () => {
     }
   };
 
-  const buildInterimResponseConfig = (): InterimResponseConfig => {
+  const buildInterimResponseConfig = (
+    config: VoiceUIConnectionConfig
+  ): InterimResponseConfig => {
     const base = {
-      triggers: interimResponseTriggers,
-      latencyThresholdInMs: interimResponseLatencyThreshold,
+      triggers: config.interimResponseTriggers,
+      latencyThresholdInMs: config.interimResponseLatencyThreshold,
     };
-    if (interimResponseType === "static_interim_response") {
+    if (config.interimResponseType === "static_interim_response") {
       return {
         ...base,
         type: "static_interim_response" as const,
-        texts: interimResponseTexts.split("\n").map(t => t.trim()).filter(t => t.length > 0),
+        texts: config.interimResponseTexts
+          .split("\n")
+          .map((text) => text.trim())
+          .filter((text) => text.length > 0),
       };
     } else {
       return {
         ...base,
         type: "llm_interim_response" as const,
-        model: interimResponseModel || undefined,
-        instructions: interimResponseInstructions || undefined,
-        maxCompletionTokens: interimResponseMaxTokens || undefined,
+        model: config.interimResponseModel || undefined,
+        instructions: config.interimResponseInstructions || undefined,
+        maxCompletionTokens: config.interimResponseMaxTokens || undefined,
       };
     }
   };
 
-  const getAvatarConfig = (): any => {
-    if (!isAvatar) {
+  const getAvatarConfig = (config: VoiceUIConnectionConfig): any => {
+    if (!config.isAvatar) {
       return undefined;
     }
 
@@ -1547,69 +1603,69 @@ const ChatInterface = () => {
         topLeft: [560, 0],
         bottomRight: [1360, 1080],
       },
-      bitrate: isPhotoAvatar ? 500000 : 1000000,
+      bitrate: config.isPhotoAvatar ? 500000 : 1000000,
     };
 
     // Only add background if URL is provided (avoid undefined values)
-    if (avatarBackgroundImageUrl) {
+    if (config.avatarBackgroundImageUrl) {
       videoParams.background = {
-        imageUrl: avatarBackgroundImageUrl,
+        imageUrl: config.avatarBackgroundImageUrl,
       };
     }
 
     // Base config with output_protocol
     const baseConfig = {
-      outputProtocol: avatarOutputMode as "webrtc" | "websocket",
+      outputProtocol: config.avatarOutputMode,
     };
 
-    if (isCustomAvatar && customAvatarName && !isPhotoAvatar) {
+    if (config.isCustomAvatar && config.customAvatarName && !config.isPhotoAvatar) {
       return {
         ...baseConfig,
-        character: customAvatarName,
+        character: config.customAvatarName,
         customized: true,
         video: videoParams,
       };
-    } else if (isCustomAvatar && customAvatarName && isPhotoAvatar) {
+    } else if (config.isCustomAvatar && config.customAvatarName && config.isPhotoAvatar) {
       return {
         ...baseConfig,
         type: "photo-avatar",
         model: "vasa-1",
-        character: customAvatarName,
+        character: config.customAvatarName,
         customized: true,
         video: videoParams,
         scene: {
-          zoom: sceneZoom / 100,
-          position_x: scenePositionX / 100,
-          position_y: scenePositionY / 100,
-          rotation_x: sceneRotationX * Math.PI / 180,
-          rotation_y: sceneRotationY * Math.PI / 180,
-          rotation_z: sceneRotationZ * Math.PI / 180,
-          amplitude: sceneAmplitude / 100,
+          zoom: config.sceneZoom / 100,
+          position_x: config.scenePositionX / 100,
+          position_y: config.scenePositionY / 100,
+          rotation_x: (config.sceneRotationX * Math.PI) / 180,
+          rotation_y: (config.sceneRotationY * Math.PI) / 180,
+          rotation_z: (config.sceneRotationZ * Math.PI) / 180,
+          amplitude: config.sceneAmplitude / 100,
         },
       };
-    } else if (isAvatar && !isCustomAvatar && !isPhotoAvatar) {
+    } else if (config.isAvatar && !config.isCustomAvatar && !config.isPhotoAvatar) {
       return {
         ...baseConfig,
-        character: avatarName.split("-")[0].toLowerCase(),
-        style: avatarName.split("-").slice(1).join("-"),
+        character: config.avatarName.split("-")[0].toLowerCase(),
+        style: config.avatarName.split("-").slice(1).join("-"),
         video: videoParams,
       };
-    } else if (isAvatar && !isCustomAvatar && isPhotoAvatar) {
+    } else if (config.isAvatar && !config.isCustomAvatar && config.isPhotoAvatar) {
       return {
         ...baseConfig,
         type: "photo-avatar",
         model: "vasa-1",
-        character: photoAvatarName.split("-")[0].toLowerCase(),
-        style: photoAvatarName.split("-").slice(1).join("-"),
+        character: config.photoAvatarName.split("-")[0].toLowerCase(),
+        style: config.photoAvatarName.split("-").slice(1).join("-"),
         video: videoParams,
         scene: {
-          zoom: sceneZoom / 100,
-          position_x: scenePositionX / 100,
-          position_y: scenePositionY / 100,
-          rotation_x: sceneRotationX * Math.PI / 180,
-          rotation_y: sceneRotationY * Math.PI / 180,
-          rotation_z: sceneRotationZ * Math.PI / 180,
-          amplitude: sceneAmplitude / 100,
+          zoom: config.sceneZoom / 100,
+          position_x: config.scenePositionX / 100,
+          position_y: config.scenePositionY / 100,
+          rotation_x: (config.sceneRotationX * Math.PI) / 180,
+          rotation_y: (config.sceneRotationY * Math.PI) / 180,
+          rotation_z: (config.sceneRotationZ * Math.PI) / 180,
+          amplitude: config.sceneAmplitude / 100,
         },
       };
     } else {
@@ -1747,6 +1803,15 @@ const ChatInterface = () => {
         console.error("Disconnect failed:", error);
       }
     }
+  };
+
+  const connectWithConfig = async (config: Partial<VoiceUIConnectionConfig>) => {
+    applyConnectionConfig(config);
+    if (isConnected) {
+      clearVideo();
+      await disconnect();
+    }
+    await handleConnect(config, { forceConnect: true });
   };
 
   // Extract valid audio chunks from a time range (kept for potential PA usage)
@@ -2490,9 +2555,306 @@ const ChatInterface = () => {
     setCustomSpeechModels(updatedModels);
   };
 
+  const buildConnectionConfig = (): VoiceUIConnectionConfig => ({
+    apiKey,
+    endpoint,
+    entraToken,
+    authType,
+    model,
+    searchEndpoint,
+    searchApiKey,
+    searchIndex,
+    searchContentField,
+    searchIdentifierField,
+    recognitionLanguage,
+    srModel,
+    phraseList: [...phraseList],
+    customSpeechModels: { ...customSpeechModels },
+    useNS,
+    useEC,
+    turnDetectionType: turnDetectionType ? { ...turnDetectionType } : null,
+    eouDetectionType,
+    instructions,
+    enableProactive,
+    temperature,
+    voiceTemperature,
+    voiceSpeed,
+    voiceType,
+    avatarVoiceSyncModel,
+    voiceName,
+    customVoiceName,
+    personalVoiceName,
+    personalVoiceModel,
+    avatarName,
+    photoAvatarName,
+    customAvatarName,
+    avatarBackgroundImageUrl,
+    voiceDeploymentId,
+    tools: tools.map((tool) => ({ ...tool })) as Array<Record<string, unknown>>,
+    mcpServers: mcpServers.map((server) => ({ ...server })),
+    foundryAgentTools: foundryAgentTools.map((tool) => ({ ...tool })),
+    isAvatar,
+    isPhotoAvatar,
+    isCustomAvatar,
+    avatarOutputMode,
+    sceneZoom,
+    scenePositionX,
+    scenePositionY,
+    sceneRotationX,
+    sceneRotationY,
+    sceneRotationZ,
+    sceneAmplitude,
+    mode,
+    agentProjectName,
+    agentName,
+    agentVersion,
+    interimResponseEnabled,
+    interimResponseType,
+    interimResponseTriggers: [...interimResponseTriggers],
+    interimResponseLatencyThreshold,
+    interimResponseTexts,
+    interimResponseModel,
+    interimResponseInstructions,
+    interimResponseMaxTokens,
+  });
+
+  const resolveConnectionConfig = (
+    overrides?: Partial<VoiceUIConnectionConfig>
+  ): VoiceUIConnectionConfig => {
+    const currentConfig = buildConnectionConfig();
+    if (!overrides) {
+      return currentConfig;
+    }
+
+    return {
+      ...currentConfig,
+      ...overrides,
+      phraseList: overrides.phraseList ? [...overrides.phraseList] : currentConfig.phraseList,
+      customSpeechModels: overrides.customSpeechModels
+        ? { ...overrides.customSpeechModels }
+        : currentConfig.customSpeechModels,
+      turnDetectionType:
+        overrides.turnDetectionType !== undefined
+          ? overrides.turnDetectionType
+          : currentConfig.turnDetectionType,
+      tools: overrides.tools ? [...overrides.tools] : currentConfig.tools,
+      mcpServers: overrides.mcpServers
+        ? overrides.mcpServers.map((server) => ({ ...server }))
+        : currentConfig.mcpServers,
+      foundryAgentTools: overrides.foundryAgentTools
+        ? overrides.foundryAgentTools.map((tool) => ({ ...tool }))
+        : currentConfig.foundryAgentTools,
+      interimResponseTriggers: overrides.interimResponseTriggers
+        ? [...overrides.interimResponseTriggers]
+        : currentConfig.interimResponseTriggers,
+    };
+  };
+
+  const applyConnectionConfig = (config: Partial<VoiceUIConnectionConfig>) => {
+    if (config.apiKey !== undefined) setApiKey(config.apiKey);
+    if (config.endpoint !== undefined) setEndpoint(config.endpoint);
+    if (config.entraToken !== undefined) setEntraToken(config.entraToken);
+    if (config.authType !== undefined) setAuthType(config.authType);
+    if (config.model !== undefined) setModel(config.model);
+    if (config.searchEndpoint !== undefined) setSearchEndpoint(config.searchEndpoint);
+    if (config.searchApiKey !== undefined) setSearchApiKey(config.searchApiKey);
+    if (config.searchIndex !== undefined) setSearchIndex(config.searchIndex);
+    if (config.searchContentField !== undefined) setSearchContentField(config.searchContentField);
+    if (config.searchIdentifierField !== undefined) setSearchIdentifierField(config.searchIdentifierField);
+    if (config.recognitionLanguage !== undefined) setRecognitionLanguage(config.recognitionLanguage);
+    if (config.srModel !== undefined) setSrModel(config.srModel);
+    if (config.phraseList !== undefined) setPhraseList([...config.phraseList]);
+    if (config.customSpeechModels !== undefined) {
+      setCustomSpeechModels({ ...config.customSpeechModels });
+    }
+    if (config.useNS !== undefined) setUseNS(config.useNS);
+    if (config.useEC !== undefined) setUseEC(config.useEC);
+    if (config.turnDetectionType !== undefined) {
+      setTurnDetectionType(config.turnDetectionType as TurnDetection | null);
+    }
+    if (config.eouDetectionType !== undefined) setEouDetectionType(config.eouDetectionType);
+    if (config.instructions !== undefined) setInstructions(config.instructions);
+    if (config.enableProactive !== undefined) setEnableProactive(config.enableProactive);
+    if (config.temperature !== undefined) setTemperature(config.temperature);
+    if (config.voiceTemperature !== undefined) setVoiceTemperature(config.voiceTemperature);
+    if (config.voiceSpeed !== undefined) setVoiceSpeed(config.voiceSpeed);
+    if (config.voiceType !== undefined) setVoiceType(config.voiceType);
+    if (config.avatarVoiceSyncModel !== undefined) {
+      setAvatarVoiceSyncModel(config.avatarVoiceSyncModel);
+    }
+    if (config.voiceName !== undefined) setVoiceName(config.voiceName);
+    if (config.customVoiceName !== undefined) setCustomVoiceName(config.customVoiceName);
+    if (config.personalVoiceName !== undefined) setPersonalVoiceName(config.personalVoiceName);
+    if (config.personalVoiceModel !== undefined) setPersonalVoiceModel(config.personalVoiceModel);
+    if (config.avatarName !== undefined) setAvatarName(config.avatarName);
+    if (config.photoAvatarName !== undefined) setPhotoAvatarName(config.photoAvatarName);
+    if (config.customAvatarName !== undefined) setCustomAvatarName(config.customAvatarName);
+    if (config.avatarBackgroundImageUrl !== undefined) {
+      setAvatarBackgroundImageUrl(config.avatarBackgroundImageUrl);
+    }
+    if (config.voiceDeploymentId !== undefined) setVoiceDeploymentId(config.voiceDeploymentId);
+    if (config.tools !== undefined) {
+      setTools(config.tools as (ToolDeclaration | SystemToolDeclaration)[]);
+    }
+    if (config.mcpServers !== undefined) setMcpServers(config.mcpServers);
+    if (config.foundryAgentTools !== undefined) {
+      setFoundryAgentTools(config.foundryAgentTools);
+    }
+    if (config.isAvatar !== undefined) setIsAvatar(config.isAvatar);
+    if (config.isPhotoAvatar !== undefined) setIsPhotoAvatar(config.isPhotoAvatar);
+    if (config.isCustomAvatar !== undefined) setIsCustomAvatar(config.isCustomAvatar);
+    if (config.avatarOutputMode !== undefined) setAvatarOutputMode(config.avatarOutputMode);
+    if (config.sceneZoom !== undefined) setSceneZoom(config.sceneZoom);
+    if (config.scenePositionX !== undefined) setScenePositionX(config.scenePositionX);
+    if (config.scenePositionY !== undefined) setScenePositionY(config.scenePositionY);
+    if (config.sceneRotationX !== undefined) setSceneRotationX(config.sceneRotationX);
+    if (config.sceneRotationY !== undefined) setSceneRotationY(config.sceneRotationY);
+    if (config.sceneRotationZ !== undefined) setSceneRotationZ(config.sceneRotationZ);
+    if (config.sceneAmplitude !== undefined) setSceneAmplitude(config.sceneAmplitude);
+    if (config.mode !== undefined) setMode(config.mode);
+    if (config.agentProjectName !== undefined) setAgentProjectName(config.agentProjectName);
+    if (config.agentName !== undefined) setAgentName(config.agentName);
+    if (config.agentVersion !== undefined) setAgentVersion(config.agentVersion);
+    if (config.interimResponseEnabled !== undefined) {
+      setInterimResponseEnabled(config.interimResponseEnabled);
+    }
+    if (config.interimResponseType !== undefined) {
+      setInterimResponseType(config.interimResponseType);
+    }
+    if (config.interimResponseTriggers !== undefined) {
+      setInterimResponseTriggers([...config.interimResponseTriggers]);
+    }
+    if (config.interimResponseLatencyThreshold !== undefined) {
+      setInterimResponseLatencyThreshold(config.interimResponseLatencyThreshold);
+    }
+    if (config.interimResponseTexts !== undefined) {
+      setInterimResponseTexts(config.interimResponseTexts);
+    }
+    if (config.interimResponseModel !== undefined) {
+      setInterimResponseModel(config.interimResponseModel);
+    }
+    if (config.interimResponseInstructions !== undefined) {
+      setInterimResponseInstructions(config.interimResponseInstructions);
+    }
+    if (config.interimResponseMaxTokens !== undefined) {
+      setInterimResponseMaxTokens(config.interimResponseMaxTokens);
+    }
+  };
+
+  useEffect(() => {
+    if (!initialConfig || initialConfigAppliedRef.current) {
+      return;
+    }
+
+    applyConnectionConfig(initialConfig);
+    initialConfigAppliedRef.current = true;
+  }, [initialConfig]);
+
+  useEffect(() => {
+    if (!onConfigChange) {
+      return;
+    }
+
+    onConfigChange(buildConnectionConfig());
+  }, [
+    onConfigChange,
+    apiKey,
+    endpoint,
+    entraToken,
+    authType,
+    model,
+    searchEndpoint,
+    searchApiKey,
+    searchIndex,
+    searchContentField,
+    searchIdentifierField,
+    recognitionLanguage,
+    srModel,
+    phraseList,
+    customSpeechModels,
+    useNS,
+    useEC,
+    turnDetectionType,
+    eouDetectionType,
+    instructions,
+    enableProactive,
+    temperature,
+    voiceTemperature,
+    voiceSpeed,
+    voiceType,
+    avatarVoiceSyncModel,
+    voiceName,
+    customVoiceName,
+    personalVoiceName,
+    personalVoiceModel,
+    avatarName,
+    photoAvatarName,
+    customAvatarName,
+    avatarBackgroundImageUrl,
+    voiceDeploymentId,
+    tools,
+    mcpServers,
+    foundryAgentTools,
+    isAvatar,
+    isPhotoAvatar,
+    isCustomAvatar,
+    avatarOutputMode,
+    sceneZoom,
+    scenePositionX,
+    scenePositionY,
+    sceneRotationX,
+    sceneRotationY,
+    sceneRotationZ,
+    sceneAmplitude,
+    mode,
+    agentProjectName,
+    agentName,
+    agentVersion,
+    interimResponseEnabled,
+    interimResponseType,
+    interimResponseTriggers,
+    interimResponseLatencyThreshold,
+    interimResponseTexts,
+    interimResponseModel,
+    interimResponseInstructions,
+    interimResponseMaxTokens,
+  ]);
+
+  useEffect(() => {
+    if (!registerWindowApi) {
+      return;
+    }
+
+    window.connectVoiceLiveAvatar = async (
+      config: Partial<VoiceUIConnectionConfig>
+    ) => {
+      await connectWithConfig(config);
+    };
+
+    window.disconnectVoiceLiveAvatar = async () => {
+      clearVideo();
+      await disconnect();
+    };
+
+    return () => {
+      delete window.connectVoiceLiveAvatar;
+      delete window.disconnectVoiceLiveAvatar;
+    };
+  });
+
+  const handleConnectClick = async () => {
+    if (onConnectRequest) {
+      await onConnectRequest(buildConnectionConfig());
+      return;
+    }
+
+    await handleConnect();
+  };
+
   return (
-    <div className="flex h-screen">
+    <div className={showVoiceUi ? "flex h-screen" : "h-full"}>
       {/* Parameters Panel */}
+      {showConfigurationPanel && (
       <div
         className="w-80 bg-gray-50 p-4 flex flex-col border-r"
         ref={settingsRef}
@@ -4218,15 +4580,17 @@ const ChatInterface = () => {
           <Button
             className="w-full"
             variant={isConnected ? "destructive" : "default"}
-            onClick={handleConnect}
+            onClick={handleConnectClick}
             disabled={isConnecting}
           >
             <Power className="w-4 h-4 mr-2" />
-            {isConnecting
-              ? "Connecting..."
-              : isConnected
-                ? "Disconnect"
-                : "Connect"}
+            {onConnectRequest
+              ? "Connect iframe"
+              : isConnecting
+                ? "Connecting..."
+                : isConnected
+                  ? "Disconnect"
+                  : "Connect"}
           </Button>
 
           {hasRecording && !isConnected && (
@@ -4256,12 +4620,14 @@ const ChatInterface = () => {
           )}
         </div>
       </div>
+      )}
 
+      {showVoiceUi && (
       <div className="flex flex-1 flex-col p-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           {/* Settings */}
-          {isMobile && (
+          {showConfigurationPanel && isMobile && (
             <div
               className="flex items-center settings"
               role="button"
@@ -4272,9 +4638,9 @@ const ChatInterface = () => {
             </div>
           )}
 
-          {/* Developer Mode */}
+          {/* Chat Mode */}
           <div className="flex items-center">
-            <span className="developer-mode">Developer mode</span>
+            <span className="developer-mode">Chat mode</span>
             <Switch
               checked={isDevelop}
               onCheckedChange={(checked: boolean) => setIsDevelop(checked)}
@@ -4471,6 +4837,7 @@ const ChatInterface = () => {
           </>
         )}
       </div>
+      )}
     </div>
   );
 };
