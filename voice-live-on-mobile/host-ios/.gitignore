@@ -1,0 +1,9 @@
+# Xcode / Swift
+DerivedData/
+.build/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.swiftpm/
+**/project.xcworkspace/xcshareddata/swiftpm/

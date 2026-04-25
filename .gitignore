@@ -453,3 +453,6 @@ application.properties
 package-lock.json
 node_modules/
 *.tsbuildinfo
+.DS_Store
+*.lscache
+
