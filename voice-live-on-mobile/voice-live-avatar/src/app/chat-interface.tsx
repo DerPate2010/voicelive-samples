@@ -806,6 +806,14 @@ const ChatInterface = ({
   const subscriptionRef = useRef<VoiceLiveSubscription | null>(null);
   const middlewareSocketRef = useRef<WebSocket | null>(null);
   const middlewareClientIdRef = useRef<string>(createClientId());
+  const lastDirectConnectionConfigRef = useRef<VoiceUIConnectionConfig | null>(null);
+  const manualDisconnectRef = useRef(false);
+  const reconnectInProgressRef = useRef(false);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleConnectRef = useRef<((
+    overrides?: Partial<VoiceUIConnectionConfig>,
+    options?: { forceConnect?: boolean }
+  ) => Promise<void>) | null>(null);
   const audioHandlerRef = useRef<AudioHandler | null>(null);
   const proactiveManagerRef = useRef<ProactiveEventManager | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
@@ -837,6 +845,52 @@ const ChatInterface = ({
       setIsCustomAvatar(false);
     }
   }, [connectionTransport, isAvatar]);
+
+  const clearPendingReconnect = () => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleUnexpectedDirectReconnect = async (reason: string) => {
+    const reconnectConfig = lastDirectConnectionConfigRef.current;
+
+    if (!reconnectConfig || reconnectConfig.connectionTransport !== "direct") {
+      return;
+    }
+
+    if (manualDisconnectRef.current || reconnectInProgressRef.current) {
+      return;
+    }
+
+    reconnectInProgressRef.current = true;
+    clearPendingReconnect();
+    setIsConnected(false);
+    setIsConnecting(true);
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      {
+        type: "status",
+        content: `Direct connection lost (${reason}). Reconnecting...`,
+      },
+    ]);
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+
+      void (async () => {
+        await disconnect({ preserveReconnectState: true });
+        await handleConnectRef.current?.(reconnectConfig, { forceConnect: true });
+      })()
+        .catch((error) => {
+          console.error("Automatic direct reconnect failed:", error);
+        })
+        .finally(() => {
+          reconnectInProgressRef.current = false;
+        });
+    }, 1500);
+  };
 
   // Default instructions for foundry agent tools
   const defaultFoundryInstructions = "You are a helpful assistant with tools. Please response a short message like 'I am working on this', 'getting the information for you, please wait' before calling the function. The response can be varied based on the question.";
@@ -921,6 +975,14 @@ const ChatInterface = ({
         if (context.sessionId) {
           setSessionId(context.sessionId);
         }
+        clearPendingReconnect();
+        reconnectInProgressRef.current = false;
+        setIsConnecting(false);
+      },
+
+      onDisconnected: async (event, _context) => {
+        console.warn("Session disconnected:", event);
+        await scheduleUnexpectedDirectReconnect(event.reason || "connection lost");
       },
 
       // Handle session created - update sessionId when received
@@ -953,6 +1015,7 @@ const ChatInterface = ({
           ...prev,
           { type: "error", content: `Session error: ${error.error?.message || "Unknown error"}` },
         ]);
+        await scheduleUnexpectedDirectReconnect(error.error?.message || "session error");
       },
 
       // Handle when a new response is created
@@ -1258,6 +1321,8 @@ const ChatInterface = ({
     if (!isConnected || options?.forceConnect) {
       let connectionConfig = resolveConnectionConfig(overrides);
       try {
+        manualDisconnectRef.current = false;
+        clearPendingReconnect();
         setIsConnecting(true);
 
         if (connectionConfig.connectionTransport === "middleware") {
@@ -1315,6 +1380,8 @@ const ChatInterface = ({
           ]);
           return;
         }
+
+        lastDirectConnectionConfigRef.current = connectionConfig;
 
         // Create VoiceLiveClient with apiVersion option
         // Build effective endpoint with query parameters
@@ -1608,6 +1675,8 @@ const ChatInterface = ({
       await disconnect();
     }
   };
+
+  handleConnectRef.current = handleConnect;
 
   const whenGreeting = async () => {
     if (sessionRef.current) {
@@ -2039,7 +2108,14 @@ const ChatInterface = ({
     });
   };
 
-  const disconnect = async () => {
+  const disconnect = async (options?: { preserveReconnectState?: boolean }) => {
+    if (!options?.preserveReconnectState) {
+      manualDisconnectRef.current = true;
+      lastDirectConnectionConfigRef.current = null;
+      reconnectInProgressRef.current = false;
+    }
+    clearPendingReconnect();
+
     if (middlewareSocketRef.current) {
       try {
         sendMiddlewareMessage("stop_session");
@@ -2073,6 +2149,7 @@ const ChatInterface = ({
         clientRef.current = null;
         peerConnection = null as unknown as RTCPeerConnection;
         setIsConnected(false);
+        setIsConnecting(false);
         audioHandlerRef.current?.stopStreamingPlayback();
         proactiveManagerRef.current?.stop();
         isUserSpeaking.current = false;
