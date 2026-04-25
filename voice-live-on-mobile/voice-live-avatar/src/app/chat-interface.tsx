@@ -784,6 +784,7 @@ const ChatInterface = ({
   const [agentProjectName, setAgentProjectName] = useState("");
   const [agentName, setAgentName] = useState("");
   const [agentVersion, setAgentVersion] = useState("");
+  const [conversationId, setConversationId] = useState("");
   const [agents, setAgents] = useState<{ name: string; version: string }[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [profile, setProfile] = useState<string | null>(null);
@@ -1332,6 +1333,7 @@ const ChatInterface = ({
             agentName: connectionConfig.agentName,
             projectName: connectionConfig.agentProjectName,
             agentVersion: connectionConfig.agentVersion || undefined,
+            conversationId: connectionConfig.conversationId || undefined,
           };
           sessionRef.current = await clientRef.current.startSession({ agent: agentConfig });
         } else {
@@ -1927,6 +1929,7 @@ const ChatInterface = ({
           agent_name: connectionConfig.mode === "agent" ? connectionConfig.agentName : undefined,
           project: connectionConfig.mode === "agent" ? connectionConfig.agentProjectName : undefined,
           agent_version: connectionConfig.mode === "agent" ? connectionConfig.agentVersion : undefined,
+          conversation_id: connectionConfig.mode === "agent" ? connectionConfig.conversationId : undefined,
         }));
       };
 
@@ -2919,6 +2922,7 @@ const ChatInterface = ({
     agentProjectName,
     agentName,
     agentVersion,
+    conversationId,
     interimResponseEnabled,
     interimResponseType,
     interimResponseTriggers: [...interimResponseTriggers] as VoiceUIConnectionConfig["interimResponseTriggers"],
@@ -3032,6 +3036,7 @@ const ChatInterface = ({
     if (config.agentProjectName !== undefined) setAgentProjectName(config.agentProjectName);
     if (config.agentName !== undefined) setAgentName(config.agentName);
     if (config.agentVersion !== undefined) setAgentVersion(config.agentVersion);
+    if (config.conversationId !== undefined) setConversationId(config.conversationId);
     if (config.interimResponseEnabled !== undefined) {
       setInterimResponseEnabled(config.interimResponseEnabled);
     }
@@ -3129,6 +3134,7 @@ const ChatInterface = ({
     agentProjectName,
     agentName,
     agentVersion,
+    conversationId,
     interimResponseEnabled,
     interimResponseType,
     interimResponseTriggers,
@@ -3348,6 +3354,12 @@ const ChatInterface = ({
                         disabled={isConnected}
                       />
                     )}
+                    <Input
+                      placeholder="Conversation ID"
+                      value={conversationId}
+                      onChange={(e) => setConversationId(e.target.value)}
+                      disabled={isConnected}
+                    />
                   </>
                 ) : (
                   <>

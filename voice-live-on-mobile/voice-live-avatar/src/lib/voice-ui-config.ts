@@ -86,6 +86,7 @@ export interface VoiceUIConnectionConfig {
   agentProjectName: string;
   agentName: string;
   agentVersion: string;
+  conversationId: string;
   interimResponseEnabled: boolean;
   interimResponseType: "static_interim_response" | "llm_interim_response";
   interimResponseTriggers: Array<"latency" | "tool">;
