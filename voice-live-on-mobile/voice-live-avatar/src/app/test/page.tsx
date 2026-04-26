@@ -113,8 +113,8 @@ export default function VoiceUiTestPage() {
   };
 
   return (
-    <main className="flex min-h-screen bg-slate-200">
-      <aside className="w-[22rem] shrink-0 border-r border-slate-300 bg-white">
+    <main className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_#f8fafc,_#dbe4f0_52%,_#c2d0e1)] text-slate-900 lg:flex-row">
+      <aside className="max-h-[50vh] shrink-0 overflow-y-auto border-b border-slate-300/80 bg-white/90 backdrop-blur lg:max-h-none lg:w-[22rem] lg:border-b-0 lg:border-r">
         <ChatInterface
           showVoiceUi={false}
           registerWindowApi={false}
@@ -139,25 +139,48 @@ export default function VoiceUiTestPage() {
         </div>
       </aside>
 
-      <section className="flex flex-1 flex-col p-4">
-        <div className="mb-3 flex items-center justify-between rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6">
+        <div className="mb-4 flex shrink-0 items-center justify-between rounded-2xl border border-white/70 bg-white/65 px-4 py-3 text-sm text-slate-700 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:mb-6">
           <span>
             {frameReady
               ? "Embedded Voice UI is ready."
               : "Waiting for embedded Voice UI..."}
           </span>
-          <span>{isConnected ? "Connected" : "Disconnected"}</span>
+          <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-white">
+            {isConnected ? "Connected" : "Disconnected"}
+          </span>
         </div>
-        <iframe
-          ref={iframeRef}
-          title="Voice UI iframe test harness"
-          src="/"
-          className="min-h-0 flex-1 rounded-xl border border-slate-300 bg-white"
-          onLoad={() => {
-            setFrameReady(true);
-            setErrorMessage(null);
-          }}
-        />
+
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+          <div className="relative flex h-full max-h-full w-full items-center justify-center">
+            <div className="relative h-full max-h-full w-auto max-w-full aspect-[430/932]">
+            <div className="pointer-events-none absolute inset-x-6 top-5 z-10 flex justify-center">
+              <div className="h-7 w-36 rounded-full bg-black/85 shadow-[0_8px_20px_rgba(0,0,0,0.45)]" />
+            </div>
+            <div className="pointer-events-none absolute -left-1 top-28 h-20 w-1 rounded-full bg-slate-700/80" />
+            <div className="pointer-events-none absolute -right-1 top-36 h-24 w-1 rounded-full bg-slate-700/80" />
+            <div className="pointer-events-none absolute -right-1 top-64 h-12 w-1 rounded-full bg-slate-700/80" />
+
+            <div className="relative h-full overflow-hidden rounded-[3rem] border border-slate-700/80 bg-slate-950 p-3 shadow-[0_28px_90px_rgba(15,23,42,0.35)]">
+              <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0))]" />
+              <div className="relative h-full overflow-hidden rounded-[2.45rem] border border-slate-800 bg-white shadow-inner">
+                <div className="flex h-full w-full flex-col bg-slate-100 pt-[30px]">
+                  <iframe
+                    ref={iframeRef}
+                    title="Voice UI iframe test harness"
+                    src="/"
+                    className="min-h-0 flex-1 border-0 bg-white"
+                    onLoad={() => {
+                      setFrameReady(true);
+                      setErrorMessage(null);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   );

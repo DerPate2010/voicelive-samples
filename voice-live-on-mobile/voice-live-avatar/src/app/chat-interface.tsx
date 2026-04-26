@@ -3359,6 +3359,10 @@ const ChatInterface = ({
     await handleConnect();
   };
 
+  const shouldShowChatWindow = isDevelop || !isConnected;
+  const shouldShowAvatarPanel = isConnected && isEnableAvatar;
+  const shouldShowAnimationPanel = isConnected && !isEnableAvatar && !isDevelop;
+
   return (
     <div className={showVoiceUi ? "flex h-screen" : "h-full"}>
       {/* Parameters Panel */}
@@ -5214,20 +5218,20 @@ const ChatInterface = ({
         </div>
 
         {/* Content */}
-        <div className={`flex ${isDevelop ? "developer-content" : "content"}`}>
-          {isConnected &&
+        <div className={`flex min-h-0 ${isDevelop ? "developer-content" : "content"}`}>
+          {shouldShowAvatarPanel &&
             (isEnableAvatar ? (
               <>
                 {/* Video Window */}
                 <div
                   ref={videoRef}
-                  className={`flex flex-1 justify-center items-center`}
+                  className="flex flex-1 justify-center items-center overflow-hidden"
                 ></div>
               </>
             ) : (
               <>
                 {/* Animation Window */}
-                <div className="flex flex-1 justify-center items-center">
+                <div className="flex flex-1 justify-center items-center overflow-hidden">
                   <div
                     key="volume-circle"
                     ref={animationRef}
@@ -5238,10 +5242,21 @@ const ChatInterface = ({
               </>
             ))}
 
-          {(isDevelop || !isConnected) && (
+          {shouldShowAnimationPanel && (
+            <div className="flex flex-1 justify-center items-center overflow-hidden px-4">
+              <div
+                key="volume-circle"
+                ref={animationRef}
+                className="volume-circle"
+              ></div>
+              <div className="robot-svg">{robotSvg()}</div>
+            </div>
+          )}
+
+          {shouldShowChatWindow && (
             <>
               {/* Chat Window */}
-              <div className="flex flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col">
                 {/* Messages Area */}
                 <div
                   id="messages-area"
@@ -5339,7 +5354,7 @@ const ChatInterface = ({
         {!isDevelop && (
           <>
             {/* Record Button */}
-            <div className="flex flex-1 justify-center items-center">
+            <div className="flex flex-1 justify-center items-center px-3 sm:px-0">
               <div className="flex justify-center items-center recording-border">
                 {isConnected && isEnableAvatar && isRecording && (
                   <div className="flex justify-center items-center sound-wave">

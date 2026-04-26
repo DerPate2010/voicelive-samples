@@ -15,10 +15,13 @@
 
 .developer-content {
     height: 98%;
+    min-height: 0;
+    gap: 1rem;
 }
 
 .content {
     height: 80%;
+    min-height: 0;
 }
 
 .content video {
@@ -35,10 +38,11 @@
 
 .messages-area {
     margin: 15px 0;
+    min-height: 0;
 }
 
 .recording-border {
-    width: 600px;
+    width: min(600px, 100%);
     border: 1px solid #D1D1D1;
     border-radius: 6px;
     padding: 20px 10px;
@@ -64,8 +68,8 @@
 
 .volume-circle {
     position: relative;
-    width: 160px;
-    height: 160px;
+    width: min(160px, 42vw);
+    height: min(160px, 42vw);
     border-radius: 50%;
     background-color: lightgray;
     transition: transform 0.5s ease;
@@ -116,5 +120,44 @@
     100% {
         transform: scale(2);
         opacity: 0.0;
+    }
+}
+
+@media (max-width: 767px) {
+    .developer-content {
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .content {
+        height: 100%;
+    }
+
+    .developer-content video,
+    .content video {
+        width: 100%;
+        height: auto;
+    }
+
+    .messages-area {
+        margin: 8px 0;
+    }
+
+    .recording-border {
+        padding: 14px 10px;
+    }
+
+    .sound-wave {
+        height: 36px;
+        margin-right: 10px;
+    }
+
+    .sound-wave2 {
+        margin-left: 10px;
+    }
+
+    .sound-wave-item {
+        width: 6px;
+        margin-right: 4px;
     }
 }
