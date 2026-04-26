@@ -464,6 +464,13 @@ export class AudioHandler {
     const circle = this.circleElement;
 
     if (!circle) return;
+    if (circle.classList.contains("voice-aura-core")) {
+      const level = Math.min(volume / 96, 1);
+      circle.style.setProperty("--voice-level", level.toFixed(3));
+      circle.parentElement?.style.setProperty("--voice-level", level.toFixed(3));
+      return;
+    }
+
     const minSize = 160;
     const size = minSize + volume;
     circle.style.backgroundColor = animationType === "record" ? "lightgray" : "lightblue";

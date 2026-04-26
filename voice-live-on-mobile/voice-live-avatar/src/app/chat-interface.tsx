@@ -5244,12 +5244,19 @@ const ChatInterface = ({
 
           {shouldShowAnimationPanel && (
             <div className="flex flex-1 justify-center items-center overflow-hidden px-4">
-              <div
-                key="volume-circle"
-                ref={animationRef}
-                className="volume-circle"
-              ></div>
-              <div className="robot-svg">{robotSvg()}</div>
+              <div className="voice-aura-stage" aria-hidden="true">
+                <div className="voice-aura-shape voice-aura-shape-one" />
+                <div className="voice-aura-shape voice-aura-shape-two" />
+                <div className="voice-aura-shape voice-aura-shape-three" />
+                <div className="voice-aura-shape voice-aura-shape-four" />
+                <div
+                  key="voice-aura-core"
+                  ref={animationRef}
+                  className="voice-aura-core"
+                >
+                  <span className="voice-aura-core-mark">⬤</span>
+                </div>
+              </div>
             </div>
           )}
 

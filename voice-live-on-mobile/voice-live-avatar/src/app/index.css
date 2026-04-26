@@ -96,6 +96,94 @@
     animation: ripple 2s linear 1s infinite;
 }
 
+.voice-aura-stage {
+    --voice-level: 0;
+    --voice-aura-transparent: rgb(126 210 255 / 0);
+    --voice-aura-highlight: rgb(190 232 255 / 0.86);
+    --voice-aura-primary: rgb(92 190 255 / 0.86);
+    --voice-aura-secondary: rgb(42 147 230 / 0.56);
+    --voice-aura-deep: rgb(24 102 196 / 0.52);
+    --voice-core: #4c1d95;
+    --voice-core-mark: rgb(255 255 255 / 0.58);
+    --voice-core-shadow: rgb(76 29 149 / 0.42);
+    position: relative;
+    width: min(280px, 72vw);
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    isolation: isolate;
+}
+
+.voice-aura-stage::before {
+    content: '';
+    position: absolute;
+    inset: 28%;
+    border-radius: 38% 62% 45% 55% / 55% 42% 58% 45%;
+    background: radial-gradient(circle at 50% 52%, var(--voice-aura-transparent) 0 18%, var(--voice-aura-primary) 34%, var(--voice-aura-secondary) 51%, var(--voice-aura-transparent) 76%);
+    filter: blur(7px);
+    opacity: 0.82;
+    z-index: 0;
+    transform: rotate(12deg) scale(calc(0.92 + var(--voice-level, 0) * 0.22));
+    animation: organic-aura-drift 6.5s ease-in-out infinite;
+}
+
+.voice-aura-shape {
+    position: absolute;
+    inset: 19%;
+    border-radius: 43% 57% 54% 46% / 58% 45% 55% 42%;
+    background: radial-gradient(circle at 50% 50%, var(--voice-aura-transparent) 0 20%, var(--voice-aura-primary) 35%, var(--voice-aura-secondary) 56%, var(--voice-aura-transparent) 78%);
+    filter: blur(6px);
+    mix-blend-mode: screen;
+    transform-origin: center;
+    z-index: 1;
+}
+
+.voice-aura-shape-one {
+    inset: 18% 21% 20% 15%;
+    background: radial-gradient(circle at 45% 54%, var(--voice-aura-transparent) 0 18%, var(--voice-aura-primary) 34%, var(--voice-aura-secondary) 58%, var(--voice-aura-transparent) 78%);
+    animation: organic-aura-one 3.8s ease-in-out infinite;
+}
+
+.voice-aura-shape-two {
+    inset: 15% 14% 24% 28%;
+    background: radial-gradient(circle at 57% 44%, var(--voice-aura-transparent) 0 16%, var(--voice-aura-highlight) 31%, var(--voice-aura-secondary) 54%, var(--voice-aura-transparent) 76%);
+    animation: organic-aura-two 4.6s ease-in-out infinite;
+}
+
+.voice-aura-shape-three {
+    inset: 25% 12% 14% 22%;
+    background: radial-gradient(circle at 52% 58%, var(--voice-aura-transparent) 0 21%, var(--voice-aura-primary) 38%, var(--voice-aura-deep) 59%, var(--voice-aura-transparent) 80%);
+    animation: organic-aura-three 5.2s ease-in-out infinite;
+}
+
+.voice-aura-shape-four {
+    inset: 22% 27% 17% 13%;
+    background: radial-gradient(circle at 42% 48%, var(--voice-aura-transparent) 0 17%, var(--voice-aura-highlight) 33%, var(--voice-aura-secondary) 55%, var(--voice-aura-transparent) 77%);
+    animation: organic-aura-four 4.2s ease-in-out infinite;
+}
+
+.voice-aura-core {
+    --voice-level: 0;
+    position: relative;
+    z-index: 2;
+    width: min(96px, 25vw);
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--voice-core);
+    color: var(--voice-core-mark);
+    box-shadow: 0 18px 48px var(--voice-core-shadow);
+    transform: scale(calc(1 + var(--voice-level, 0) * 0.08));
+    transition: transform 120ms ease-out;
+}
+
+.voice-aura-core-mark {
+    font-size: 2rem;
+    line-height: 1;
+    transform: translateY(-1px);
+}
+
 @keyframes ripple {
     0% {
         transform: scale(1);
@@ -120,6 +208,71 @@
     100% {
         transform: scale(2);
         opacity: 0.0;
+    }
+}
+
+@keyframes organic-aura-drift {
+    0%, 100% {
+        border-radius: 38% 62% 45% 55% / 55% 42% 58% 45%;
+        transform: rotate(12deg) scale(calc(0.92 + var(--voice-level, 0) * 0.22));
+    }
+
+    45% {
+        border-radius: 58% 42% 60% 40% / 41% 60% 40% 59%;
+        transform: rotate(-8deg) scale(calc(1.04 + var(--voice-level, 0) * 0.3));
+    }
+
+    72% {
+        border-radius: 46% 54% 39% 61% / 62% 38% 62% 38%;
+        transform: rotate(18deg) scale(calc(0.98 + var(--voice-level, 0) * 0.24));
+    }
+}
+
+@keyframes organic-aura-one {
+    0%, 100% {
+        border-radius: 48% 52% 42% 58% / 54% 45% 55% 46%;
+        transform: translate(-7%, 4%) rotate(8deg) scale(calc(0.9 + var(--voice-level, 0) * 0.28));
+    }
+
+    50% {
+        border-radius: 60% 40% 57% 43% / 42% 60% 40% 58%;
+        transform: translate(8%, -8%) rotate(-16deg) scale(calc(1.12 + var(--voice-level, 0) * 0.35));
+    }
+}
+
+@keyframes organic-aura-two {
+    0%, 100% {
+        border-radius: 39% 61% 59% 41% / 61% 40% 60% 39%;
+        transform: translate(8%, 1%) rotate(-21deg) scale(calc(0.84 + var(--voice-level, 0) * 0.22));
+    }
+
+    46% {
+        border-radius: 55% 45% 41% 59% / 45% 58% 42% 55%;
+        transform: translate(-6%, 7%) rotate(13deg) scale(calc(1.08 + var(--voice-level, 0) * 0.36));
+    }
+}
+
+@keyframes organic-aura-three {
+    0%, 100% {
+        border-radius: 57% 43% 43% 57% / 45% 56% 44% 55%;
+        transform: translate(4%, 8%) rotate(18deg) scale(calc(0.88 + var(--voice-level, 0) * 0.28));
+    }
+
+    58% {
+        border-radius: 43% 57% 62% 38% / 60% 42% 58% 40%;
+        transform: translate(-9%, -6%) rotate(-11deg) scale(calc(1.16 + var(--voice-level, 0) * 0.32));
+    }
+}
+
+@keyframes organic-aura-four {
+    0%, 100% {
+        border-radius: 45% 55% 51% 49% / 58% 48% 52% 42%;
+        transform: translate(-5%, -7%) rotate(-5deg) scale(calc(0.82 + var(--voice-level, 0) * 0.24));
+    }
+
+    52% {
+        border-radius: 61% 39% 45% 55% / 41% 62% 38% 59%;
+        transform: translate(7%, 6%) rotate(22deg) scale(calc(1.06 + var(--voice-level, 0) * 0.33));
     }
 }
 
@@ -159,5 +312,13 @@
     .sound-wave-item {
         width: 6px;
         margin-right: 4px;
+    }
+
+    .voice-aura-stage {
+        width: min(240px, 74vw);
+    }
+
+    .voice-aura-core {
+        width: min(86px, 27vw);
     }
 }
