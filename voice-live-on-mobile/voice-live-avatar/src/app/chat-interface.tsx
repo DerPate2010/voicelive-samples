@@ -814,6 +814,8 @@ const ChatInterface = ({
     overrides?: Partial<VoiceUIConnectionConfig>,
     options?: { forceConnect?: boolean }
   ) => Promise<void>) | null>(null);
+  const lastCompletedAssistantMessageRef = useRef<string>("");
+  const shouldRepeatMissedMessagesAfterReconnectRef = useRef(false);
   const audioHandlerRef = useRef<AudioHandler | null>(null);
   const proactiveManagerRef = useRef<ProactiveEventManager | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
@@ -865,6 +867,8 @@ const ChatInterface = ({
     }
 
     reconnectInProgressRef.current = true;
+    shouldRepeatMissedMessagesAfterReconnectRef.current =
+      lastCompletedAssistantMessageRef.current.trim().length > 0;
     clearPendingReconnect();
     setIsConnected(false);
     setIsConnecting(true);
@@ -911,6 +915,68 @@ const ChatInterface = ({
         conversationId: nextConversationId,
       };
     }
+  };
+
+  const extractLastCompletedAssistantMessage = (response: { output?: unknown[] } | undefined): string => {
+    if (!response?.output || !Array.isArray(response.output)) {
+      return "";
+    }
+
+    const transcriptParts: string[] = [];
+
+    for (const outputItem of response.output) {
+      if (!outputItem || typeof outputItem !== "object") {
+        continue;
+      }
+
+      const outputRecord = outputItem as Record<string, unknown>;
+      if (outputRecord.role !== "assistant") {
+        continue;
+      }
+
+      const content = outputRecord.content;
+      if (!Array.isArray(content)) {
+        continue;
+      }
+
+      for (const contentItem of content) {
+        if (!contentItem || typeof contentItem !== "object") {
+          continue;
+        }
+
+        const transcript = (contentItem as Record<string, unknown>).transcript;
+        if (typeof transcript === "string" && transcript.trim().length > 0) {
+          transcriptParts.push(transcript.trim());
+        }
+      }
+    }
+
+    return transcriptParts.join(" ").trim();
+  };
+
+  const repeatMissedMessagesAfterReconnect = async () => {
+    if (!sessionRef.current || !shouldRepeatMissedMessagesAfterReconnectRef.current) {
+      return;
+    }
+
+    const lastCompletedAssistantMessage = lastCompletedAssistantMessageRef.current.trim();
+    shouldRepeatMissedMessagesAfterReconnectRef.current = false;
+
+    if (!lastCompletedAssistantMessage) {
+      return;
+    }
+
+    await sessionRef.current.addConversationItem({
+      type: "message",
+      role: "system",
+      content: [
+        {
+          type: "input_text",
+          text: `the connection has been interupted. repeat your last messages that i missed. do not use indirect speech or tell that you are repeating. Just send it again as if it is the first time the last message that I received was [${lastCompletedAssistantMessage}]`,
+        },
+      ],
+    } as SystemMessageItem);
+    await sessionRef.current.sendEvent({ type: "response.create" });
   };
 
   // Default instructions for foundry agent tools
@@ -1104,7 +1170,11 @@ const ChatInterface = ({
       },
 
       // Handle response done
-      onResponseDone: async (_event, _context) => {
+      onResponseDone: async (event, _context) => {
+        const lastCompletedAssistantMessage = extractLastCompletedAssistantMessage(event.response);
+        if (lastCompletedAssistantMessage) {
+          lastCompletedAssistantMessageRef.current = lastCompletedAssistantMessage;
+        }
         currentStreamingMessageRef.current = null;
         referenceText.current = "";
         audioChunksForPA.current = [];
@@ -1444,6 +1514,12 @@ const ChatInterface = ({
             try {
               const messageText = typeof data === "string" ? data : new TextDecoder().decode(data);
               const parsed = JSON.parse(messageText);
+
+              // console.log(
+              //   "[VoiceLive direct] received event:",
+              //   parsed
+              // );
+
               if (parsed.type === "response.created") {
                 updateDirectReconnectConversationId(parsed.response?.conversation_id);
               }
@@ -1675,6 +1751,8 @@ const ChatInterface = ({
               currentSessionId,
           },
         ]);
+
+        await repeatMissedMessagesAfterReconnect();
 
         if (connectionConfig.enableProactive) {
           proactiveManagerRef.current = new ProactiveEventManager(
@@ -2139,6 +2217,8 @@ const ChatInterface = ({
       manualDisconnectRef.current = true;
       lastDirectConnectionConfigRef.current = null;
       reconnectInProgressRef.current = false;
+      lastCompletedAssistantMessageRef.current = "";
+      shouldRepeatMissedMessagesAfterReconnectRef.current = false;
     }
     clearPendingReconnect();
 
