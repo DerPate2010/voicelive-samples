@@ -892,6 +892,27 @@ const ChatInterface = ({
     }, 1500);
   };
 
+  const updateDirectReconnectConversationId = (nextConversationId?: string) => {
+    if (!nextConversationId) {
+      return;
+    }
+
+    setConversationId((currentConversationId) => {
+      if (currentConversationId === nextConversationId) {
+        return currentConversationId;
+      }
+
+      return nextConversationId;
+    });
+
+    if (lastDirectConnectionConfigRef.current?.connectionTransport === "direct") {
+      lastDirectConnectionConfigRef.current = {
+        ...lastDirectConnectionConfigRef.current,
+        conversationId: nextConversationId,
+      };
+    }
+  };
+
   // Default instructions for foundry agent tools
   const defaultFoundryInstructions = "You are a helpful assistant with tools. Please response a short message like 'I am working on this', 'getting the information for you, please wait' before calling the function. The response can be varied based on the question.";
 
@@ -1020,6 +1041,8 @@ const ChatInterface = ({
 
       // Handle when a new response is created
       onResponseCreated: async (event, _context) => {
+        updateDirectReconnectConversationId(event.response?.conversationId);
+
         // Start a new streaming message with unique ID
         const messageId = event.response?.id || Date.now().toString();
         currentStreamingMessageRef.current = {
@@ -1421,6 +1444,9 @@ const ChatInterface = ({
             try {
               const messageText = typeof data === "string" ? data : new TextDecoder().decode(data);
               const parsed = JSON.parse(messageText);
+              if (parsed.type === "response.created") {
+                updateDirectReconnectConversationId(parsed.response?.conversation_id);
+              }
               if (parsed.type === "response.video.delta" && parsed.delta) {
                 // Handle video chunk directly since SDK drops this event type
                 if (avatarOutputModeRef.current === "websocket") {
