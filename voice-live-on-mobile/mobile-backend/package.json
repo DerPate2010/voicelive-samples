@@ -1,0 +1,19 @@
+{
+  "name": "voice-live-mobile-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo backend API for Voice Live mobile sample apps.",
+  "type": "module",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.6.0",
+    "express": "^4.21.0"
+  }
+}

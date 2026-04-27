@@ -1,0 +1,13 @@
+name: voice-live-mobile-backend
+metadata:
+  template: voice-live-mobile-backend@0.1.0
+
+infra:
+  provider: bicep
+  path: infra
+
+services:
+  mobile-backend:
+    project: .
+    language: js
+    host: appservice
