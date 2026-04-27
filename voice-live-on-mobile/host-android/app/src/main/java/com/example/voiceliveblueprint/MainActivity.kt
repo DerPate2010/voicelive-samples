@@ -236,7 +236,14 @@ fun WebViewComponent(webConfig: VoiceLiveWebConfig) {
                 loadUrl(WebAppUrl)
             }
         },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        onRelease = { webView ->
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.clearHistory()
+            webView.removeAllViews()
+            webView.destroy()
+        }
     )
 }
 
