@@ -8,6 +8,53 @@ This folder contains the mobile-hosted Voice Live solution split into five parts
 - `host-ios`: iOS WKWebView host for the SPA
 - `vlagent`: Azure AI Foundry agent definition used by the mobile flow
 
+## Architecture Overview
+
+```mermaid
+flowchart LR
+	subgraph NativeHosts[Native Mobile Hosts]
+		AppCore[Native Core]
+		MobileWebViewHost[SPA in embedded WebView / WKWebView]
+	end
+
+	VLAPI[Voice Live API]
+	FoundryAgent[AI Foundry Agent]
+
+	subgraph MobileBackendHost[Mobile Backend]
+		TokenBroker[Token Broker / Session Bootstrap]
+		BusinessTools[Business API]
+	end
+
+	EntraID[Entra ID<br>issues access token for ai.azure.com scope]
+
+	MobileWebViewHost <-->|bootstrap and token| TokenBroker
+
+	TokenBroker <-->|requests access token for managed identity| EntraID
+
+	MobileWebViewHost <-->|"WebSocket<br>Bearer token"| VLAPI
+	VLAPI <-.-> FoundryAgent
+
+	FoundryAgent <-->|"tool calls<br>account balance and card id"| BusinessTools
+
+	BusinessTools -->|"card payload (not implemented)"| MobileWebViewHost
+
+	TokenBroker -->|Config| AppCore
+	AppCore --> MobileWebViewHost
+
+	classDef host fill:#d7f0ff,stroke:#227093,color:#0f172a;
+	classDef web fill:#fff4cc,stroke:#a16207,color:#111827;
+	classDef api fill:#e7f9e7,stroke:#2f855a,color:#0f172a;
+	classDef ai fill:#fde2e4,stroke:#b83280,color:#0f172a;
+	classDef identity fill:#ede9fe,stroke:#6d28d9,color:#0f172a;
+
+	class MobileWebViewHost host;
+	class AppCore host;
+	class SPA web;
+	class TokenBroker,BusinessTools api;
+	class VLAPI,FoundryAgent ai;
+	class EntraID identity;
+```
+
 ## Configuration Overview
 
 The native hosts now only need one environment-specific endpoint: the mobile backend base URL. They no longer hardcode the SPA URL.
