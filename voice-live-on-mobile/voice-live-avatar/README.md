@@ -69,3 +69,27 @@ This sample can be deployed to cloud for global access. The recommended hosting 
 * Step 2: Create an `Azure Container App` and deploy the Docker image built from above steps, following [Deploy from an existing container image](https://learn.microsoft.com/azure/container-apps/quickstart-portal). Make sure to set the environment variables as described in the previous sections, such as `SPEECH_REGION`, `SPEECH_KEY`, etc.
 
 * Step 3: Once the `Azure Container App` is created, you can access the sample by navigating to the URL of the `Azure Container App` in your browser.
+
+### Deployment with azd for the static SPA only without python container
+
+If you only want to deploy the static Next.js export from `src` and do not use the Python server from `app.py`, this folder now includes an `azd` setup for Azure Static Web Apps.
+
+What gets created:
+- One Azure Static Web App in the existing resource group `rg-voice-live-mobile-backend`
+
+Files prepared for this flow:
+- `azure.yaml`
+- `infra/main.bicep`
+
+Run from this folder:
+
+```bash
+azd auth login
+azd env new <environment-name>
+azd up
+```
+
+Notes:
+- The app is deployed from the static export in `out/`, produced by `npm run build`.
+- The Bicep template defaults to the location of the existing resource group.
+- `azd up` uses the fixed resource group `rg-voice-live-mobile-backend`, so make sure it already exists in your subscription.

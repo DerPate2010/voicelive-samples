@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import WebKit
 
-private let webAppURL = URL(string: "https://4zsk66f0-3000.euw.devtunnels.ms/")!
+private let webAppURL = URL(string: "https://gentle-ocean-024721303.7.azurestaticapps.net/")!
 private let mobileBackendURL = URL(string: "https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net")!
 
 struct BackendSession: Decodable {

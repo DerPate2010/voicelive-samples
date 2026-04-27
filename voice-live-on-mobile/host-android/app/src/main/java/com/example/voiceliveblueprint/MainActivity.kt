@@ -54,7 +54,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-private const val WebAppUrl = "https://4zsk66f0-3000.euw.devtunnels.ms/"
+private const val WebAppUrl = "https://gentle-ocean-024721303.7.azurestaticapps.net/"
 private const val MobileBackendUrl = "https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net"
 
 data class User(val name: String, val userName: String)
