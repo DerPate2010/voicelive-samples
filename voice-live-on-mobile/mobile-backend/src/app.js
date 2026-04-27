@@ -4,10 +4,12 @@ import { DefaultAzureCredential } from "@azure/identity";
 
 const PORT = Number.parseInt(process.env.PORT || "8080", 10);
 const VLAPI_SCOPE = "https://ai.azure.com/.default";
+const normalizeEnvString = (value) => String(value || "").trim();
 const vlapiConfig = {
-  endpoint: process.env.AZURE_VOICELIVE_ENDPOINT || "",
-  agentName: process.env.AZURE_VOICELIVE_AGENT_NAME || "",
-  projectName: process.env.AZURE_VOICELIVE_PROJECT_NAME || process.env.AZURE_VOICELIVE_PROJECT || "",
+  endpoint: normalizeEnvString(process.env.AZURE_VOICELIVE_ENDPOINT),
+  agentName: normalizeEnvString(process.env.AZURE_VOICELIVE_AGENT_NAME),
+  projectName: normalizeEnvString(process.env.AZURE_VOICELIVE_PROJECT_NAME || process.env.AZURE_VOICELIVE_PROJECT),
+  webAppUrl: normalizeEnvString(process.env.VOICE_LIVE_WEB_APP_URL),
 };
 
 const users = new Map([
@@ -53,6 +55,12 @@ function getSession(req, res) {
 
 function getBaseUrl(req) {
   return `${req.protocol}://${req.get("host")}`;
+}
+
+function getMissingVoiceLiveConfig() {
+  return Object.entries(vlapiConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
 }
 
 function buildOpenApiDocument(req) {
@@ -174,6 +182,11 @@ app.post("/vlapi/token", async (req, res) => {
   if (!session) return;
 
   try {
+    const missingConfig = getMissingVoiceLiveConfig();
+    if (missingConfig.length > 0) {
+      throw new Error(`Missing Voice Live configuration: ${missingConfig.join(", ")}`);
+    }
+
     const accessToken = await credential.getToken(VLAPI_SCOPE);
     if (!accessToken?.token) {
       throw new Error("DefaultAzureCredential returned no token.");

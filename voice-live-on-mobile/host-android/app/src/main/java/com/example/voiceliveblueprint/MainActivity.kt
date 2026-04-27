@@ -54,13 +54,11 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-private const val WebAppUrl = "https://gentle-ocean-024721303.7.azurestaticapps.net/"
-private const val MobileBackendUrl = "https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net"
-
 data class User(val name: String, val userName: String)
 data class BackendSession(val sessionId: String, val displayName: String)
 data class VoiceLiveWebConfig(
     val sessionId: String,
+    val webAppUrl: String,
     val endpoint: String,
     val agentName: String,
     val projectName: String,
@@ -233,7 +231,7 @@ fun WebViewComponent(webConfig: VoiceLiveWebConfig) {
 
                 WebView.setWebContentsDebuggingEnabled(true)
 
-                loadUrl(WebAppUrl)
+                loadUrl(webConfig.webAppUrl)
             }
         },
         modifier = Modifier.fillMaxSize(),
@@ -248,25 +246,28 @@ fun WebViewComponent(webConfig: VoiceLiveWebConfig) {
 }
 
 suspend fun createVoiceLiveWebConfig(userName: String): VoiceLiveWebConfig = withContext(Dispatchers.IO) {
+    val mobileBackendUrl = requireConfiguredBackendUrl()
     val session = loginDemoUser(userName)
     val tokenResponse = postJson(
-        "$MobileBackendUrl/vlapi/token",
+        "$mobileBackendUrl/vlapi/token",
         JSONObject().put("sessionId", session.sessionId)
     )
     val config = tokenResponse.getJSONObject("config")
 
     VoiceLiveWebConfig(
         sessionId = session.sessionId,
-        endpoint = config.optString("endpoint"),
-        agentName = config.optString("agentName"),
-        projectName = config.optString("projectName"),
+        webAppUrl = requireBackendConfigValue(config, "webAppUrl"),
+        endpoint = requireBackendConfigValue(config, "endpoint"),
+        agentName = requireBackendConfigValue(config, "agentName"),
+        projectName = requireBackendConfigValue(config, "projectName"),
         accessToken = tokenResponse.getString("accessToken")
     )
 }
 
 private fun loginDemoUser(userName: String): BackendSession {
+    val mobileBackendUrl = requireConfiguredBackendUrl()
     val response = postJson(
-        "$MobileBackendUrl/login",
+        "$mobileBackendUrl/login",
         JSONObject().put("userName", userName)
     )
 
@@ -296,6 +297,22 @@ private fun postJson(url: String, body: JSONObject): JSONObject {
     }
 
     return JSONObject(responseText)
+}
+
+private fun requireConfiguredBackendUrl(): String {
+    val configuredUrl = BuildConfig.MOBILE_BACKEND_URL.trim().removeSuffix("/")
+    check(configuredUrl.isNotEmpty()) {
+        "Set VOICE_LIVE_MOBILE_BACKEND_URL as a Gradle property or environment variable before running the Android host app."
+    }
+    return configuredUrl
+}
+
+private fun requireBackendConfigValue(config: JSONObject, key: String): String {
+    val value = config.optString(key).trim()
+    check(value.isNotEmpty()) {
+        "The backend response is missing config.${key}."
+    }
+    return value
 }
 
 private fun buildConnectScript(webConfig: VoiceLiveWebConfig): String {

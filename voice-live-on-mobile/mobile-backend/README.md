@@ -25,6 +25,7 @@ Optional Voice Live web app configuration returned by `POST /vlapi/token`:
 AZURE_VOICELIVE_ENDPOINT=https://<your-ai-foundry-or-voice-live-endpoint>
 AZURE_VOICELIVE_AGENT_NAME=<agent-name>
 AZURE_VOICELIVE_PROJECT_NAME=<project-name>
+VOICE_LIVE_WEB_APP_URL=https://<your-static-web-app-url>
 ```
 
 ## API
@@ -97,7 +98,8 @@ Response:
   "config": {
     "endpoint": "https://<your-ai-foundry-or-voice-live-endpoint>",
     "agentName": "<agent-name>",
-    "projectName": "<project-name>"
+    "projectName": "<project-name>",
+    "webAppUrl": "https://<your-static-web-app-url>"
   }
 }
 ```
@@ -122,6 +124,7 @@ Set these `azd` environment values before deployment if you want the deployed to
 azd env set AZURE_VOICELIVE_ENDPOINT "https://<your-ai-foundry-or-voice-live-endpoint>"
 azd env set AZURE_VOICELIVE_AGENT_NAME "<agent-name>"
 azd env set AZURE_VOICELIVE_PROJECT_NAME "<project-name>"
+azd env set VOICE_LIVE_WEB_APP_URL "https://<your-static-web-app-url>"
 ```
 
 The deployed app exposes:

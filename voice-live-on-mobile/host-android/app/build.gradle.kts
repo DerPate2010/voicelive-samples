@@ -3,6 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val mobileBackendUrl = providers.gradleProperty("voiceLiveMobileBackendUrl")
+    .orElse(providers.environmentVariable("VOICE_LIVE_MOBILE_BACKEND_URL"))
+    .orElse("")
+    .get()
+    .trim()
+
+val escapedMobileBackendUrl = mobileBackendUrl
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "com.example.voiceliveblueprint"
     compileSdk {
@@ -17,6 +27,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "MOBILE_BACKEND_URL", "\"$escapedMobileBackendUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

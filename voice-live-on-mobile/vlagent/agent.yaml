@@ -28,7 +28,7 @@ definition:
             version: 0.1.0
             description: Demo backend for Voice Live mobile samples. Data is static and sessions are in-memory only.
           servers:
-            - url: https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net
+            - url: #set to deployed mobile backend URL
           paths:
             /account/balance:
               post:

@@ -2,9 +2,6 @@ import Foundation
 import SwiftUI
 import WebKit
 
-private let webAppURL = URL(string: "https://gentle-ocean-024721303.7.azurestaticapps.net/")!
-private let mobileBackendURL = URL(string: "https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net")!
-
 struct BackendSession: Decodable {
     let sessionId: String
     let displayName: String
@@ -15,6 +12,7 @@ struct TokenResponse: Decodable {
         let endpoint: String
         let agentName: String
         let projectName: String
+        let webAppUrl: String
     }
 
     let accessToken: String
@@ -23,6 +21,7 @@ struct TokenResponse: Decodable {
 
 struct VoiceLiveWebConfiguration {
     let sessionId: String
+    let webAppURL: URL
     let endpoint: String
     let agentName: String
     let projectName: String
@@ -78,7 +77,7 @@ struct WebView: UIViewRepresentable {
         webView.isOpaque = false
         webView.scrollView.bounces = false
 
-        webView.load(URLRequest(url: webAppURL))
+        webView.load(URLRequest(url: webConfiguration.webAppURL))
 
         return webView
     }
@@ -125,6 +124,7 @@ func createVoiceLiveWebConfiguration(for userName: String) async throws -> Voice
 
     return VoiceLiveWebConfiguration(
         sessionId: session.sessionId,
+        webAppURL: try configuredURL(tokenResponse.config.webAppUrl, description: "config.webAppUrl"),
         endpoint: tokenResponse.config.endpoint,
         agentName: tokenResponse.config.agentName,
         projectName: tokenResponse.config.projectName,
@@ -134,7 +134,7 @@ func createVoiceLiveWebConfiguration(for userName: String) async throws -> Voice
 
 func postJSON<T: Decodable>(path: String, body: [String: String], responseType: T.Type) async throws -> T {
     let normalizedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    var request = URLRequest(url: mobileBackendURL.appendingPathComponent(normalizedPath))
+    var request = URLRequest(url: try configuredMobileBackendURL().appendingPathComponent(normalizedPath))
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -147,6 +147,36 @@ func postJSON<T: Decodable>(path: String, body: [String: String], responseType: 
     }
 
     return try JSONDecoder().decode(T.self, from: data)
+}
+
+func configuredMobileBackendURL() throws -> URL {
+    let configuredValue = (Bundle.main.object(forInfoDictionaryKey: "MobileBackendURL") as? String ?? "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    return try configuredURL(
+        configuredValue,
+        description: "the MobileBackendURL Info.plist value"
+    )
+}
+
+func configuredURL(_ value: String, description: String) throws -> URL {
+    let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalizedValue.isEmpty else {
+        throw NSError(
+            domain: "VoiceLiveBlueprintConfiguration",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Set \(description) before running the iOS host app."]
+        )
+    }
+
+    guard let url = URL(string: normalizedValue) else {
+        throw NSError(
+            domain: "VoiceLiveBlueprintConfiguration",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "\(description) is not a valid URL: \(normalizedValue)"]
+        )
+    }
+
+    return url
 }
 
 func buildConnectScript(webConfiguration: VoiceLiveWebConfiguration) -> String {
