@@ -865,6 +865,8 @@ const ChatInterface = ({
   const reconnectInProgressRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const auxContentPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectOnlineListenerAttachedRef = useRef(false);
   const handleConnectRef = useRef<((
     overrides?: Partial<VoiceUIConnectionConfig>,
     options?: { forceConnect?: boolean }
@@ -923,7 +925,90 @@ const ChatInterface = ({
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+
+    if (reconnectOnlineListenerAttachedRef.current && typeof window !== "undefined") {
+      window.removeEventListener("online", handleBrowserOnlineForReconnect);
+      reconnectOnlineListenerAttachedRef.current = false;
+    }
   };
+
+  const getReconnectDelayMs = (attempt: number) => {
+    return 2000;
+  };
+
+  const scheduleDirectReconnectAttempt = (
+    reconnectConfig: VoiceUIConnectionConfig,
+    reason: string,
+  ) => {
+    if (manualDisconnectRef.current || reconnectConfig.connectionTransport !== "direct") {
+      return;
+    }
+
+    clearPendingReconnect();
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          type: "status",
+          content: "Network offline. Waiting to reconnect...",
+        },
+      ]);
+
+      if (!reconnectOnlineListenerAttachedRef.current && typeof window !== "undefined") {
+        window.addEventListener("online", handleBrowserOnlineForReconnect);
+        reconnectOnlineListenerAttachedRef.current = true;
+      }
+
+      return;
+    }
+
+    const attempt = reconnectAttemptRef.current;
+    const delayMs = getReconnectDelayMs(attempt);
+    reconnectTimeoutRef.current = setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+
+      void (async () => {
+        await disconnect({ preserveReconnectState: true });
+        await handleConnectRef.current?.(reconnectConfig, { forceConnect: true });
+      })()
+        .then(() => {
+          reconnectAttemptRef.current = 0;
+        })
+        .catch((error) => {
+          reconnectAttemptRef.current += 1;
+          console.error("Automatic direct reconnect failed:", error);
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              type: "status",
+              content: `Reconnect failed (${reason}). Retrying in ${Math.round(getReconnectDelayMs(reconnectAttemptRef.current) / 1000)}s...`,
+            },
+          ]);
+          scheduleDirectReconnectAttempt(reconnectConfig, reason);
+        })
+        .finally(() => {
+          reconnectInProgressRef.current = false;
+        });
+    }, delayMs);
+  };
+
+  function handleBrowserOnlineForReconnect() {
+    const reconnectConfig = lastDirectConnectionConfigRef.current;
+    if (!reconnectConfig || reconnectConfig.connectionTransport !== "direct") {
+      return;
+    }
+
+    reconnectAttemptRef.current = 0;
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      {
+        type: "status",
+        content: "Network restored. Reconnecting...",
+      },
+    ]);
+    scheduleDirectReconnectAttempt(reconnectConfig, "network restored");
+  }
 
   const scheduleUnexpectedDirectReconnect = async (reason: string) => {
     const reconnectConfig = lastDirectConnectionConfigRef.current;
@@ -939,6 +1024,7 @@ const ChatInterface = ({
     reconnectInProgressRef.current = true;
     shouldRepeatMissedMessagesAfterReconnectRef.current =
       lastCompletedAssistantMessageRef.current.trim().length > 0;
+    reconnectAttemptRef.current = 0;
     clearPendingReconnect();
     setIsConnected(false);
     setIsConnecting(true);
@@ -950,20 +1036,7 @@ const ChatInterface = ({
       },
     ]);
 
-    reconnectTimeoutRef.current = setTimeout(() => {
-      reconnectTimeoutRef.current = null;
-
-      void (async () => {
-        await disconnect({ preserveReconnectState: true });
-        await handleConnectRef.current?.(reconnectConfig, { forceConnect: true });
-      })()
-        .catch((error) => {
-          console.error("Automatic direct reconnect failed:", error);
-        })
-        .finally(() => {
-          reconnectInProgressRef.current = false;
-        });
-    }, 1500);
+    scheduleDirectReconnectAttempt(reconnectConfig, reason);
   };
 
   const updateDirectReconnectConversationId = (nextConversationId?: string) => {
@@ -1922,6 +1995,7 @@ const ChatInterface = ({
           audioHandlerRef.current.startSessionRecording();
         }
 
+        reconnectAttemptRef.current = 0;
         setIsConnected(true);
         // Get session ID - may be available now or will be updated via onSessionCreated handler
         const currentSessionId = sessionRef.current?.sessionId || "connecting...";
@@ -1949,6 +2023,11 @@ const ChatInterface = ({
         }
       } catch (error) {
         console.error("Connection failed:", error);
+
+        if (options?.forceConnect && connectionConfig.connectionTransport === "direct") {
+          throw error;
+        }
+
         setMessages((prevMessages) => [
           ...prevMessages,
           {

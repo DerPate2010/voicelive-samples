@@ -2,38 +2,39 @@
 This sample demonstrates the usage of Azure Voice Live API with avatar.
 
 ### Prerequisites
-- Docker installed on your machine. You can download and install Docker from [here](https://www.docker.com/get-started).
 - An active Azure account. If you don't have an Azure account, you can create a account [here](https://azure.microsoft.com/free/ai-services).
 - A Microsoft Foundry resource created in one of the supported regions. For more information about region availability, see the [voice live overview documentation](https://learn.microsoft.com/azure/ai-services/speech-service/voice-live).
+- Node.js 20 or newer.
 
 ### Avatar available locations
 The avatar feature is currently available in the following service regions: Southeast Asia, North Europe, West Europe, Sweden Central, South Central US, East US 2, and West US 2.
 
 ### Build the sample
-To run the sample, you need to build it into a Docker image. Navigate to the folder containing this README.md document (make sure you are inside the right directory):
+Navigate to the folder containing this README.md document:
   ```bash
   # Windows (PowerShell/Command Prompt)
-  cd .\javascript\voice-live-avatar\
+  cd .\voice-live-on-mobile\voice-live-avatar\
   ```
   ```bash
   # macOS/Linux (Terminal)
-  cd ./javascript/voice-live-avatar/
+  cd ./voice-live-on-mobile/voice-live-avatar/
   ```
 
-Run below command to build the Docker image:
+Install dependencies and build the static SPA:
   ```bash
-  docker build -t voice-live-avatar .
+  npm install
+  npm run build
   ```
-
-This command will create a Docker image named `voice-live-avatar`.
 
 ### Start the sample
-To start the sample, use the following command:
+For local development, use:
   ```bash
-  docker run --rm -p 3000:3000 voice-live-avatar
+  npm run dev
   ```
 
 Then open your web browser and navigate to [http://localhost:3000](http://localhost:3000) to access the sample.
+
+This mobile-hosted variant uses only the static Next.js SPA. The previous Python server and Python-based container path are no longer part of this app.
 
 ### Configure and play the sample
 
@@ -58,21 +59,11 @@ Then open your web browser and navigate to [http://localhost:3000](http://localh
 
 ### Deployment
 
-This sample can be deployed to cloud for global access. The recommended hosting platform is [Azure Container Apps](https://learn.microsoft.com/azure/container-apps/overview). Here are the steps to deploy this sample to `Azure Container Apps`:
+This sample is intended to be deployed as a static SPA. The prepared deployment path in this folder uses Azure Static Web Apps via `azd`.
 
-* Step 1: Push the Docker image to a container registry, such as [Azure Container Registry](https://learn.microsoft.com/azure/container-registry/). You can use the following command to push the image to Azure Container Registry:
-  ```bash
-  docker tag voice-live-avatar <your-registry-name>.azurecr.io/voice-live-avatar:latest
-  docker push <your-registry-name>.azurecr.io/voice-live-avatar:latest
-  ```
+### Deployment with azd for the static SPA
 
-* Step 2: Create an `Azure Container App` and deploy the Docker image built from above steps, following [Deploy from an existing container image](https://learn.microsoft.com/azure/container-apps/quickstart-portal). Make sure to set the environment variables as described in the previous sections, such as `SPEECH_REGION`, `SPEECH_KEY`, etc.
-
-* Step 3: Once the `Azure Container App` is created, you can access the sample by navigating to the URL of the `Azure Container App` in your browser.
-
-### Deployment with azd for the static SPA only without python container
-
-If you only want to deploy the static Next.js export from `src` and do not use the Python server from `app.py`, this folder now includes an `azd` setup for Azure Static Web Apps.
+This folder includes an `azd` setup for Azure Static Web Apps.
 
 What gets created:
 - One Azure Static Web App in the existing resource group `rg-voice-live-mobile-backend`
