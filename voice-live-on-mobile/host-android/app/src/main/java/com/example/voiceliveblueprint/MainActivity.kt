@@ -301,6 +301,7 @@ private fun postJson(url: String, body: JSONObject): JSONObject {
 private fun buildConnectScript(webConfig: VoiceLiveWebConfig): String {
     val config = JSONObject()
         .put("connectionTransport", "direct")
+        .put("middlewareBaseUrl", MobileBackendUrl)
         .put("authType", "entraToken")
         .put("entraToken", webConfig.accessToken)
         .put("endpoint", webConfig.endpoint)

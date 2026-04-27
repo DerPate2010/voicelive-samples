@@ -1,5 +1,5 @@
 import express from "express";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { DefaultAzureCredential } from "@azure/identity";
 
 const PORT = Number.parseInt(process.env.PORT || "8080", 10);
@@ -17,6 +17,12 @@ const users = new Map([
 ]);
 
 const sessions = new Map();
+const auxContents = new Map();
+const AUX_CONTENT_KEY_LENGTH = 10;
+const AUX_CONTENT_KEY_ALPHABET = Array.from(
+  { length: 0x255f - 0x2550 + 1 },
+  (_, index) => String.fromCodePoint(0x2550 + index),
+);
 const credential = new DefaultAzureCredential(
   process.env.AZURE_CLIENT_ID
     ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID }
@@ -53,6 +59,27 @@ function getSession(req, res) {
 
 function getBaseUrl(req) {
   return `${req.protocol}://${req.get("host")}`;
+}
+
+function createAuxContentKey() {
+  return Array.from({ length: AUX_CONTENT_KEY_LENGTH }, () => {
+    const characterIndex = randomInt(0, AUX_CONTENT_KEY_ALPHABET.length);
+    return AUX_CONTENT_KEY_ALPHABET[characterIndex];
+  }).join("");
+}
+
+function storeAuxContent(content) {
+  let key = createAuxContentKey();
+  while (auxContents.has(key)) {
+    key = createAuxContentKey();
+  }
+
+  auxContents.set(key, {
+    content,
+    createdAt: new Date().toISOString(),
+  });
+
+  return key;
 }
 
 function buildOpenApiDocument(req) {
@@ -101,12 +128,46 @@ function buildOpenApiDocument(req) {
                       displayName: { type: "string" },
                       accountBalance: { type: "number" },
                       currency: { type: "string" },
+                      auxContent: {
+                        type: "string",
+                        description: "Optional key for auxiliary JSON content delivered over a separate channel.",
+                      },
                     },
                   },
                 },
               },
             },
             "401": { description: "Invalid or missing session." },
+          },
+        },
+      },
+      "/aux-content/{key}": {
+        get: {
+          operationId: "getAuxContent",
+          summary: "Get auxiliary JSON content for a previously returned auxContent key.",
+          parameters: [
+            {
+              name: "key",
+              in: "path",
+              required: true,
+              schema: {
+                type: "string",
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The auxiliary JSON payload for the requested key.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    additionalProperties: true,
+                  },
+                },
+              },
+            },
+            "404": { description: "Unknown auxiliary content key." },
           },
         },
       },
@@ -119,12 +180,19 @@ app.get("/", (_req, res) => {
     service: "voice-live-mobile-backend",
     version: "0.1.0",
     users: [...users.keys()],
-    endpoints: ["POST /login", "POST /account/balance", "POST /vlapi/token", "GET /openapi.json", "GET /health"],
+    endpoints: [
+      "POST /login",
+      "POST /account/balance",
+      "GET /aux-content/:key",
+      "POST /vlapi/token",
+      "GET /openapi.json",
+      "GET /health",
+    ],
   });
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "healthy", sessions: sessions.size });
+  res.json({ status: "healthy", sessions: sessions.size, auxContents: auxContents.size });
 });
 
 app.get("/openapi.json", (req, res) => {
@@ -161,12 +229,34 @@ app.post("/account/balance", (req, res) => {
   if (!session) return;
 
   const user = users.get(session.userName);
-  res.json({
+  const response = {
     userName: session.userName,
     displayName: user.displayName,
     accountBalance: user.accountBalance,
     currency: user.currency,
-  });
+  };
+
+  if (user.accountBalance > 5000) {
+    response.auxContent = storeAuxContent({
+      accountbalance: user.accountBalance,
+    });
+  }
+
+  res.json(response);
+});
+
+app.get("/aux-content/:key", (req, res) => {
+  const key = String(req.params.key || "");
+  const auxContent = auxContents.get(key);
+  if (!auxContent) {
+    res.status(404).json({
+      error: "aux_content_not_found",
+      message: "No auxiliary content exists for the provided key.",
+    });
+    return;
+  }
+
+  res.json(auxContent.content);
 });
 
 app.post("/vlapi/token", async (req, res) => {

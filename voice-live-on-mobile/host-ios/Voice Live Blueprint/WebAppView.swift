@@ -152,6 +152,7 @@ func postJSON<T: Decodable>(path: String, body: [String: String], responseType: 
 func buildConnectScript(webConfiguration: VoiceLiveWebConfiguration) -> String {
     let config: [String: Any] = [
         "connectionTransport": "direct",
+        "middlewareBaseUrl": mobileBackendURL.absoluteString,
         "authType": "entraToken",
         "entraToken": webConfiguration.accessToken,
         "endpoint": webConfiguration.endpoint,

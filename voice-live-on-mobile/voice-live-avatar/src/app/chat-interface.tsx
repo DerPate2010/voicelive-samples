@@ -181,6 +181,14 @@ interface FoundryAgentCallEvent {
   agent_response_id?: string;
 }
 
+interface AuxContentPopupState {
+  key: string;
+  payload: unknown;
+}
+
+const AUX_CONTENT_PATTERN = /╠([\u2550-\u255F]{10})╣/g;
+const AUX_CONTENT_DISPLAY_CHAR_PATTERN = /[\u2550-\u256F]/g;
+
 type ConnectionTransport = VoiceUIConnectionConfig["connectionTransport"];
 
 interface MiddlewareServerMessage {
@@ -222,6 +230,26 @@ function decodeBase64Chunk(data: string): Uint8Array {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+function extractAuxContentKeysFromText(text: string): string[] {
+  return Array.from(text.matchAll(AUX_CONTENT_PATTERN), (match) => match[1]);
+}
+
+function stripAuxContentKeysFromText(text: string): string {
+  return text.replace(AUX_CONTENT_PATTERN, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function sanitizeAuxContentDisplayText(text: string): string {
+  return text.replace(AUX_CONTENT_DISPLAY_CHAR_PATTERN, "");
+}
+
+function formatAuxContentPayload(payload: unknown): string {
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  return JSON.stringify(payload, null, 2);
 }
 
 function buildMiddlewareWebSocketUrl(baseUrl: string, clientId: string): string {
@@ -813,6 +841,7 @@ const ChatInterface = ({
   const [agents, setAgents] = useState<{ name: string; version: string }[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [profile, setProfile] = useState<string | null>(null);
+  const [auxContentPopup, setAuxContentPopup] = useState<AuxContentPopupState | null>(null);
 
   // Interim response configuration
   const [interimResponseEnabled, setInterimResponseEnabled] = useState(false);
@@ -835,6 +864,7 @@ const ChatInterface = ({
   const manualDisconnectRef = useRef(false);
   const reconnectInProgressRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const auxContentPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleConnectRef = useRef<((
     overrides?: Partial<VoiceUIConnectionConfig>,
     options?: { forceConnect?: boolean }
@@ -857,6 +887,8 @@ const ChatInterface = ({
   // Track current streaming message for real-time updates
   const currentStreamingMessageRef = useRef<{ id: string; content: string } | null>(null);
   const initialConfigAppliedRef = useRef(false);
+  const seenAuxContentKeysRef = useRef<Set<string>>(new Set());
+  const middlewareBaseUrlRef = useRef("");
 
   const isEnableAvatar = isAvatar && (avatarName || photoAvatarName || customAvatarName);
 
@@ -864,6 +896,19 @@ const ChatInterface = ({
   useEffect(() => {
     avatarOutputModeRef.current = avatarOutputMode;
   }, [avatarOutputMode]);
+
+  useEffect(() => {
+    middlewareBaseUrlRef.current = middlewareBaseUrl.trim();
+  }, [middlewareBaseUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (auxContentPopupTimeoutRef.current) {
+        clearTimeout(auxContentPopupTimeoutRef.current);
+        auxContentPopupTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (connectionTransport === "middleware" && isAvatar) {
@@ -942,6 +987,83 @@ const ChatInterface = ({
     }
   };
 
+  const showAuxContentPopup = useCallback((key: string, payload: unknown) => {
+    if (auxContentPopupTimeoutRef.current) {
+      clearTimeout(auxContentPopupTimeoutRef.current);
+    }
+
+    setAuxContentPopup({ key, payload });
+    auxContentPopupTimeoutRef.current = setTimeout(() => {
+      setAuxContentPopup(null);
+      auxContentPopupTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
+  const fetchAuxContent = useCallback(async (key: string) => {
+    if (seenAuxContentKeysRef.current.has(key)) {
+      return;
+    }
+
+    const baseUrl = middlewareBaseUrlRef.current || lastDirectConnectionConfigRef.current?.middlewareBaseUrl?.trim() || "";
+    if (!baseUrl) {
+      console.warn("Cannot load aux content without a backend base URL.");
+      return;
+    }
+
+    seenAuxContentKeysRef.current.add(key);
+
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, "")}/aux-content/${encodeURIComponent(key)}`);
+      if (!response.ok) {
+        throw new Error(`Aux content request failed with status ${response.status}`);
+      }
+
+      const payload = await response.json();
+      showAuxContentPopup(key, payload);
+    } catch (error) {
+      seenAuxContentKeysRef.current.delete(key);
+      console.error("Failed to load aux content:", error);
+    }
+  }, [showAuxContentPopup]);
+
+  const handleAuxContentFromResponse = useCallback(async (response: { output?: unknown[] } | undefined) => {
+    if (!response?.output || !Array.isArray(response.output)) {
+      return;
+    }
+
+    const keys = new Set<string>();
+
+    for (const outputItem of response.output) {
+      if (!outputItem || typeof outputItem !== "object") {
+        continue;
+      }
+
+      const content = (outputItem as Record<string, unknown>).content;
+      if (!Array.isArray(content)) {
+        continue;
+      }
+
+      for (const contentItem of content) {
+        if (!contentItem || typeof contentItem !== "object") {
+          continue;
+        }
+
+        const transcript = (contentItem as Record<string, unknown>).transcript;
+        if (typeof transcript !== "string") {
+          continue;
+        }
+
+        for (const key of extractAuxContentKeysFromText(transcript)) {
+          keys.add(key);
+        }
+      }
+    }
+
+    for (const key of keys) {
+      await fetchAuxContent(key);
+    }
+  }, [fetchAuxContent]);
+
   const extractLastCompletedAssistantMessage = (response: { output?: unknown[] } | undefined): string => {
     if (!response?.output || !Array.isArray(response.output)) {
       return "";
@@ -971,7 +1093,10 @@ const ChatInterface = ({
 
         const transcript = (contentItem as Record<string, unknown>).transcript;
         if (typeof transcript === "string" && transcript.trim().length > 0) {
-          transcriptParts.push(transcript.trim());
+          const cleanedTranscript = stripAuxContentKeysFromText(transcript.trim());
+          if (cleanedTranscript.length > 0) {
+            transcriptParts.push(cleanedTranscript);
+          }
         }
       }
     }
@@ -1163,7 +1288,7 @@ const ChatInterface = ({
       // Handle text delta streaming
       onResponseTextDelta: async (event, _context) => {
         if (currentStreamingMessageRef.current && event.delta) {
-          currentStreamingMessageRef.current.content += event.delta;
+          currentStreamingMessageRef.current.content += sanitizeAuxContentDisplayText(event.delta);
           const targetId = currentStreamingMessageRef.current.id;
           const newContent = currentStreamingMessageRef.current.content;
           setMessages((prev) => {
@@ -1182,7 +1307,7 @@ const ChatInterface = ({
       // Handle audio transcription delta (assistant's response transcript)
       onResponseAudioTranscriptDelta: async (event, _context) => {
         if (currentStreamingMessageRef.current && event.delta) {
-          currentStreamingMessageRef.current.content += event.delta;
+          currentStreamingMessageRef.current.content += sanitizeAuxContentDisplayText(event.delta);
           const targetId = currentStreamingMessageRef.current.id;
           const newContent = currentStreamingMessageRef.current.content;
           setMessages((prev) => {
@@ -1214,9 +1339,26 @@ const ChatInterface = ({
       // Handle response done
       onResponseDone: async (event, _context) => {
         const lastCompletedAssistantMessage = extractLastCompletedAssistantMessage(event.response);
+        const currentStreamingMessageId = currentStreamingMessageRef.current?.id;
         if (lastCompletedAssistantMessage) {
           lastCompletedAssistantMessageRef.current = lastCompletedAssistantMessage;
+          if (currentStreamingMessageId) {
+            setMessages((prev) => {
+              const idx = prev.findIndex((message) => message.id === currentStreamingMessageId);
+              if (idx < 0) {
+                return prev;
+              }
+
+              const updated = [...prev];
+              updated[idx] = {
+                ...updated[idx],
+                content: lastCompletedAssistantMessage,
+              };
+              return updated;
+            });
+          }
         }
+        await handleAuxContentFromResponse(event.response);
         currentStreamingMessageRef.current = null;
         referenceText.current = "";
         audioChunksForPA.current = [];
@@ -1234,18 +1376,18 @@ const ChatInterface = ({
               const updated = [...prev];
               updated[existingIdx] = {
                 ...updated[existingIdx],
-                content: event.transcript || "",
+                content: sanitizeAuxContentDisplayText(event.transcript || ""),
               };
               return updated;
             }
             // If no existing message found, create a new one
-            return [...prev, { type: "user", content: event.transcript || "", id: itemId }];
+            return [...prev, { type: "user", content: sanitizeAuxContentDisplayText(event.transcript || ""), id: itemId }];
           });
         } else {
           // Fallback: add as new message if no itemId
           setMessages((prev) => [
             ...prev,
-            { type: "user", content: event.transcript || "" },
+            { type: "user", content: sanitizeAuxContentDisplayText(event.transcript || "") },
           ]);
         }
         referenceText.current = event.transcript || "";
@@ -2183,7 +2325,7 @@ const ChatInterface = ({
 
             case "transcript":
               if (message.text) {
-                const transcriptText = message.text;
+                const transcriptText = sanitizeAuxContentDisplayText(message.text);
                 setMessages((prevMessages) => [
                   ...prevMessages,
                   {
@@ -2262,6 +2404,12 @@ const ChatInterface = ({
       reconnectInProgressRef.current = false;
       lastCompletedAssistantMessageRef.current = "";
       shouldRepeatMissedMessagesAfterReconnectRef.current = false;
+      seenAuxContentKeysRef.current.clear();
+      setAuxContentPopup(null);
+      if (auxContentPopupTimeoutRef.current) {
+        clearTimeout(auxContentPopupTimeoutRef.current);
+        auxContentPopupTimeoutRef.current = null;
+      }
     }
     clearPendingReconnect();
 
@@ -3411,6 +3559,20 @@ const ChatInterface = ({
 
   return (
     <div className={showVoiceUi ? "flex h-screen" : "h-full"}>
+      {auxContentPopup && (
+        <div
+          className="pointer-events-none fixed right-4 top-4 z-50 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-emerald-200 bg-white/95 p-4 text-slate-900 shadow-2xl backdrop-blur"
+          style={{ animation: "aux-content-fly-in 0.24s ease-out" }}
+        >
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+            Auxiliary Content
+          </div>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-sm leading-6 text-slate-800">
+            {formatAuxContentPayload(auxContentPopup.payload)}
+          </pre>
+        </div>
+      )}
+
       {/* Parameters Panel */}
       {showConfigurationPanel && (
       <div
