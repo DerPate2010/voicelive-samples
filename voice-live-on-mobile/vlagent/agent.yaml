@@ -1,0 +1,99 @@
+metadata:
+  logo: Avatar_Default.svg
+  description: ""
+  modified_at: "1777297843"
+  microsoft.voice-live.enabled: "false"
+object: agent.version
+id: vlagent:26
+name: vlagent
+version: "26"
+description: ""
+created_at: 1777297844
+definition:
+  kind: prompt
+  model: gpt-4o
+  instructions: |-
+    You are a helpful AI assistant. Respond naturally and conversationally. Keep your responses concise but engaging.
+
+    if asked about account balance use tool account_balance using the provided session id. call it always, do not use information from previous messages. If the tool output contains a value for "auxContent" add it to the beginning of the final response between the characters ╠ at the beginning and ╣afterwards as markers
+  tools:
+    - type: openapi
+      openapi:
+        name: account_balance
+        description: Provides optional card content for the client
+        spec:
+          openapi: 3.0.3
+          info:
+            title: Voice Live Mobile Demo Backend
+            version: 0.1.0
+            description: Demo backend for Voice Live mobile samples. Data is static and sessions are in-memory only.
+          servers:
+            - url: https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net
+          paths:
+            /account/balance:
+              post:
+                operationId: getAccountBalance
+                summary: Get the account balance for the current demo user session.
+                description: Returns a static account balance for one of the demo users. Pass the sessionId returned by /login.
+                requestBody:
+                  required: true
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        required:
+                          - sessionId
+                        properties:
+                          sessionId:
+                            type: string
+                            description: Session identifier returned by the demo login endpoint.
+                responses:
+                  "200":
+                    description: The account balance for the current demo user.
+                    content:
+                      application/json:
+                        schema:
+                          type: object
+                          required:
+                            - userName
+                            - displayName
+                            - accountBalance
+                            - currency
+                          properties:
+                            userName:
+                              type: string
+                            displayName:
+                              type: string
+                            accountBalance:
+                              type: number
+                            currency:
+                              type: string
+                            auxContent:
+                              type: string
+                              description: Optional key for auxiliary JSON content delivered over a separate channel.
+                  "401":
+                    description: Invalid or missing session.
+            /aux-content/{key}:
+              get:
+                operationId: getAuxContent
+                summary: Get auxiliary JSON content for a previously returned auxContent key.
+                parameters:
+                  - name: key
+                    in: path
+                    required: true
+                    schema:
+                      type: string
+                responses:
+                  "200":
+                    description: The auxiliary JSON payload for the requested key.
+                    content:
+                      application/json:
+                        schema:
+                          type: object
+                          additionalProperties: true
+                  "404":
+                    description: Unknown auxiliary content key.
+        auth:
+          type: anonymous
+          security_scheme: {}
+status: active
