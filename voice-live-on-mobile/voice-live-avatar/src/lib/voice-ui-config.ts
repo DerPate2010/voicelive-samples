@@ -83,6 +83,7 @@ export interface VoiceUIConnectionConfig {
   sceneRotationZ: number;
   sceneAmplitude: number;
   mode: "model" | "agent";
+  hostSessionId: string;
   agentProjectName: string;
   agentName: string;
   agentVersion: string;

@@ -3,13 +3,13 @@ import SwiftUI
 struct User: Identifiable {
     let id = UUID()
     let name: String
-    let sessionID: String
+    let userName: String
 }
 
 let users: [User] = [
-    User(name: "Tom Miller", sessionID: "tom_miller_static_session"),
-    User(name: "Sarah Johnson", sessionID: "sarah_johnson_static_session"),
-    User(name: "Max Weber", sessionID: "max_weber_static_session")
+    User(name: "Alex Becker", userName: "alex"),
+    User(name: "Sam Weber", userName: "sam"),
+    User(name: "Taylor Klein", userName: "taylor")
 ]
 
 struct ContentView: View {
@@ -24,7 +24,7 @@ struct ContentView: View {
                         VStack(alignment: .leading) {
                             Text(user.name)
                                 .font(.headline)
-                            Text(user.sessionID)
+                            Text(user.userName)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

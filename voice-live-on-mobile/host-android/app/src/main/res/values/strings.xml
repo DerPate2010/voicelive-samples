@@ -3,7 +3,8 @@
     <string name="user_list_title">Select a User</string>
     <string name="back_button">Back</string>
     <string name="microphone_permission_needed">Microphone permission is required for the web app.</string>
-    <string name="user_1_name">Tom Miller</string>
-    <string name="user_2_name">Sarah Jones</string>
-    <string name="user_3_name">Bob Smith</string>
+    <string name="loading_demo_session">Preparing demo session...</string>
+    <string name="user_1_name">Alex Becker</string>
+    <string name="user_2_name">Sam Weber</string>
+    <string name="user_3_name">Taylor Klein</string>
 </resources>

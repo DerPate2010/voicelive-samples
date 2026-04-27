@@ -805,6 +805,7 @@ const ChatInterface = ({
   const [mode, setMode] = useState<"model" | "agent">("model");
   const [connectionTransport, setConnectionTransport] = useState<ConnectionTransport>("direct");
   const [middlewareBaseUrl, setMiddlewareBaseUrl] = useState("");
+  const [hostSessionId, setHostSessionId] = useState("");
   const [agentProjectName, setAgentProjectName] = useState("");
   const [agentName, setAgentName] = useState("");
   const [agentVersion, setAgentVersion] = useState("");
@@ -1001,6 +1002,23 @@ const ChatInterface = ({
       ],
     } as SystemMessageItem);
     await sessionRef.current.sendEvent({ type: "response.create" });
+  };
+
+  const sendHostSessionIdToAgent = async (nextHostSessionId: string) => {
+    if (!sessionRef.current || !nextHostSessionId.trim()) {
+      return;
+    }
+
+    await sessionRef.current.addConversationItem({
+      type: "message",
+      role: "system",
+      content: [
+        {
+          type: "input_text",
+          text: `remember the session id for tool calling: ${nextHostSessionId.trim()}`,
+        },
+      ],
+    } as SystemMessageItem);
   };
 
   // Default instructions for foundry agent tools
@@ -1776,6 +1794,7 @@ const ChatInterface = ({
           },
         ]);
 
+        await sendHostSessionIdToAgent(connectionConfig.hostSessionId);
         await repeatMissedMessagesAfterReconnect();
 
         if (connectionConfig.enableProactive) {
@@ -3126,6 +3145,7 @@ const ChatInterface = ({
     sceneRotationZ,
     sceneAmplitude,
     mode,
+    hostSessionId,
     agentProjectName,
     agentName,
     agentVersion,
@@ -3240,6 +3260,7 @@ const ChatInterface = ({
     if (config.sceneRotationZ !== undefined) setSceneRotationZ(config.sceneRotationZ);
     if (config.sceneAmplitude !== undefined) setSceneAmplitude(config.sceneAmplitude);
     if (config.mode !== undefined) setMode(config.mode);
+    if (config.hostSessionId !== undefined) setHostSessionId(config.hostSessionId);
     if (config.agentProjectName !== undefined) setAgentProjectName(config.agentProjectName);
     if (config.agentName !== undefined) setAgentName(config.agentName);
     if (config.agentVersion !== undefined) setAgentVersion(config.agentVersion);
@@ -3338,6 +3359,7 @@ const ChatInterface = ({
     sceneRotationZ,
     sceneAmplitude,
     mode,
+    hostSessionId,
     agentProjectName,
     agentName,
     agentVersion,
