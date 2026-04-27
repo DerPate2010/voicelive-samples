@@ -254,6 +254,30 @@ function resolveMiddlewareVoiceName(config: VoiceUIConnectionConfig): string {
   return config.customVoiceName || config.personalVoiceName || config.voiceName;
 }
 
+function normalizeAuthConfig(config: VoiceUIConnectionConfig): VoiceUIConnectionConfig {
+  return {
+    ...config,
+    apiKey: config.authType === "apiKey" ? config.apiKey : "",
+    entraToken: config.authType === "entraToken" ? config.entraToken : "",
+  };
+}
+
+function buildAzureAuthHeaders(
+  authType: VoiceUIConnectionConfig["authType"],
+  apiKey: string,
+  entraToken: string
+): Record<string, string> {
+  if (authType === "entraToken" && entraToken) {
+    return { Authorization: `Bearer ${entraToken}` };
+  }
+
+  if (authType === "apiKey" && apiKey) {
+    return { "Ocp-Apim-Subscription-Key": apiKey };
+  }
+
+  return {};
+}
+
 function isFoundryAgentCallItem(item: unknown): item is FoundryAgentCallItem {
   return typeof item === "object" && item !== null && (item as Record<string, unknown>).type === "foundry_agent_call";
 }
@@ -1424,7 +1448,7 @@ const ChatInterface = ({
         }
 
         // Refresh the token before connecting
-        if (configLoaded) {
+        if (configLoaded && connectionConfig.authType === "entraToken") {
           try {
             const response = await fetch("/config");
             if (response.ok) {
@@ -1451,7 +1475,7 @@ const ChatInterface = ({
         }
 
         // Set up credentials for the new SDK
-        credentialRef.current = connectionConfig.entraToken
+        credentialRef.current = connectionConfig.authType === "entraToken"
           ? {
               getToken: async () => ({
                 token: connectionConfig.entraToken,
@@ -3121,10 +3145,10 @@ const ChatInterface = ({
   ): VoiceUIConnectionConfig => {
     const currentConfig = buildConnectionConfig();
     if (!overrides) {
-      return currentConfig;
+      return normalizeAuthConfig(currentConfig);
     }
 
-    return {
+    return normalizeAuthConfig({
       ...currentConfig,
       ...overrides,
       phraseList: overrides.phraseList ? [...overrides.phraseList] : currentConfig.phraseList,
@@ -3145,7 +3169,7 @@ const ChatInterface = ({
       interimResponseTriggers: overrides.interimResponseTriggers
         ? [...overrides.interimResponseTriggers]
         : currentConfig.interimResponseTriggers,
-    };
+    });
   };
 
   const applyConnectionConfig = (config: Partial<VoiceUIConnectionConfig>) => {
@@ -3260,7 +3284,7 @@ const ChatInterface = ({
       return;
     }
 
-    onConfigChange(buildConnectionConfig());
+    onConfigChange(normalizeAuthConfig(buildConnectionConfig()));
   }, [
     onConfigChange,
     connectionTransport,
@@ -4633,12 +4657,7 @@ const ChatInterface = ({
                               try {
                                 const baseUrl = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
                                 const url = `${baseUrl}/customvoice/personalvoices?api-version=2024-02-01-preview`;
-                                const headers: Record<string, string> = {};
-                                if (entraToken) {
-                                  headers["Authorization"] = `Bearer ${entraToken}`;
-                                } else if (apiKey) {
-                                  headers["Ocp-Apim-Subscription-Key"] = apiKey;
-                                }
+                                const headers = buildAzureAuthHeaders(authType, apiKey, entraToken);
                                 const res = await fetch(url, { headers });
                                 if (!res.ok) {
                                   throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
@@ -4923,12 +4942,7 @@ const ChatInterface = ({
                             const url = isPhotoAvatar
                               ? `${baseUrl}/customavatar/endpoints?kind=PhotoAvatar&api-version=2023-12-01-preview`
                               : `${baseUrl}/customavatar/endpoints?api-version=2023-12-01-preview`;
-                            const headers: Record<string, string> = {};
-                            if (entraToken) {
-                              headers["Authorization"] = `Bearer ${entraToken}`;
-                            } else if (apiKey) {
-                              headers["Ocp-Apim-Subscription-Key"] = apiKey;
-                            }
+                            const headers = buildAzureAuthHeaders(authType, apiKey, entraToken);
                             const res = await fetch(url, { headers });
                             if (!res.ok) {
                               throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
