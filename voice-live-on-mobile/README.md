@@ -24,21 +24,21 @@ flowchart LR
 		TokenBroker[Token Broker / Session Bootstrap]
 		BusinessTools[Business API]
 	end
+	
+    EntraID[Entra ID<br>issues access token for ai.azure.com scope]
 
-	EntraID[Entra ID<br>issues access token for ai.azure.com scope]
-
-	MobileWebViewHost <-->|bootstrap and token| TokenBroker
+	MobileWebViewHost <-->|VLAPI Session Token| TokenBroker
 
 	TokenBroker <-->|requests access token for managed identity| EntraID
 
-	MobileWebViewHost <-->|"WebSocket<br>Bearer token"| VLAPI
+	MobileWebViewHost <-->|"WebSocket<br>VLAPI Session Token (Auth)<br>User Session Token (Context)"| VLAPI
 	VLAPI <-.-> FoundryAgent
 
 	FoundryAgent <-->|"tool calls<br>account balance and card id"| BusinessTools
 
-	BusinessTools -->|"card payload (not implemented)"| MobileWebViewHost
+	BusinessTools -->|"card payload"| MobileWebViewHost
 
-	TokenBroker -->|Config| AppCore
+	TokenBroker -->|User Session Token,<br>VLAPI config| AppCore
 	AppCore --> MobileWebViewHost
 
 	classDef host fill:#d7f0ff,stroke:#227093,color:#0f172a;
