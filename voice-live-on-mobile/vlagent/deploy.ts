@@ -79,34 +79,12 @@ const accountBalanceSpec = {
                     "401": { description: "Invalid or missing session." },
                 },
             },
-        },
-        "/aux-content/{key}": {
-            get: {
-                operationId: "getAuxContent",
-                summary: "Get auxiliary JSON content for a previously returned auxContent key.",
-                parameters: [
-                    { name: "key", in: "path", required: true, schema: { type: "string" } },
-                ],
-                responses: {
-                    "200": {
-                        description: "The auxiliary JSON payload for the requested key.",
-                        content: {
-                            "application/json": {
-                                schema: { type: "object", additionalProperties: true },
-                            },
-                        },
-                    },
-                    "404": { description: "Unknown auxiliary content key." },
-                },
-            },
-        },
+        }
     },
 };
 
 async function main(): Promise<void> {
     const project = new AIProjectClient(PROJECT_ENDPOINT!, new DefaultAzureCredential());
-
-    var agent28 = await project.agents.getVersion(AGENT_NAME, "28");
 
     const agent = await project.agents.createVersion(AGENT_NAME, {
         kind: "prompt",
@@ -114,7 +92,7 @@ async function main(): Promise<void> {
         instructions: `You are a helpful AI assistant. Respond naturally and conversationally. Keep your responses concise but engaging.
 
 if asked about account balance use tool account_balance using the provided session id. call it always, do not use information from previous messages
-If the account_balance tool output contains a value for "auxContent" call the ShowCard tool with the content of "auxContent" as the payload`,
+If the account_balance has an output call the ShowCard tool with the result as the payload`,
         tools: [
             {
                 type: "openapi",
