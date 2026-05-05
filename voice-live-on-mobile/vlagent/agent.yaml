@@ -1,14 +1,14 @@
 metadata:
   logo: Avatar_Default.svg
   description: ""
-  modified_at: "1777297843"
+  modified_at: "1777901684"
   microsoft.voice-live.enabled: "false"
 object: agent.version
-id: vlagent:26
+id: vlagent:27
 name: vlagent
-version: "26"
+version: "27"
 description: ""
-created_at: 1777297844
+created_at: 1777901685
 definition:
   kind: prompt
   model: gpt-4o
@@ -16,6 +16,7 @@ definition:
     You are a helpful AI assistant. Respond naturally and conversationally. Keep your responses concise but engaging.
 
     if asked about account balance use tool account_balance using the provided session id. call it always, do not use information from previous messages. If the tool output contains a value for "auxContent" add it to the beginning of the final response between the characters ╠ at the beginning and ╣afterwards as markers
+    If the account_balance tool output contains a value for "auxContent" call the ShowCard tool with the content of "auxContent" as the payload
   tools:
     - type: openapi
       openapi:
@@ -28,7 +29,7 @@ definition:
             version: 0.1.0
             description: Demo backend for Voice Live mobile samples. Data is static and sessions are in-memory only.
           servers:
-            - url: #set to deployed mobile backend URL
+            - url: https://app-voice-live-mobile-backend-4mlyqpwfzauts.azurewebsites.net
           paths:
             /account/balance:
               post:
@@ -96,4 +97,25 @@ definition:
         auth:
           type: anonymous
           security_scheme: {}
+    - type: mcp
+      server_label: blog_info
+      server_url: https://gateway.pipeworx.io/jsonplaceholder/mcp
+      allowed_tools:
+        tool_names:
+          - get_posts
+      require_approval: never
+      project_connection_id: blog-info
+    - type: function
+      name: _Main_g_ShowCard_0
+      description: show strcutured data in the client
+      parameters:
+        type: object
+        required:
+          - payload
+        properties:
+          payload:
+            description: content to be displayed
+            type: string
+        additionalProperties: false
+      strict: null
 status: active

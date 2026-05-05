@@ -783,6 +783,8 @@ const ChatInterface = ({
   const [sceneRotationZ, setSceneRotationZ] = useState(0.0);
   const [sceneAmplitude, setSceneAmplitude] = useState(60.0);
   const [isDevelop, setIsDevelop] = useState(false);
+  const [cardOverlay, setCardOverlay] = useState<string | null>(null);
+  const cardOverlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [enableSearch, setEnableSearch] = useState(false);
   const [enablePA, setEnablePA] = useState(false);
   const [hasRecording, setHasRecording] = useState(false);
@@ -866,6 +868,24 @@ const ChatInterface = ({
   useEffect(() => {
     avatarOutputModeRef.current = avatarOutputMode;
   }, [avatarOutputMode]);
+
+  // Auto-dismiss card overlay after 4 seconds
+  useEffect(() => {
+    if (cardOverlay !== null) {
+      if (cardOverlayTimerRef.current) {
+        clearTimeout(cardOverlayTimerRef.current);
+      }
+      cardOverlayTimerRef.current = setTimeout(() => {
+        setCardOverlay(null);
+        cardOverlayTimerRef.current = null;
+      }, 4000);
+    }
+    return () => {
+      if (cardOverlayTimerRef.current) {
+        clearTimeout(cardOverlayTimerRef.current);
+      }
+    };
+  }, [cardOverlay]);
 
   useEffect(() => {
     if (connectionTransport === "middleware" && isAvatar) {
@@ -1401,6 +1421,14 @@ const ChatInterface = ({
           await sessionRef.current?.sendEvent({ type: "response.create" });
           referenceText.current = "";
           audioChunksForPA.current = [];
+        } else if (event.name === "ShowCard") {
+          setCardOverlay(event.arguments || "{}");
+          await sessionRef.current?.addConversationItem({
+            type: "function_call_output",
+            callId: event.callId,
+            output: "OK",
+          } as FunctionCallOutputItem);
+          await sessionRef.current?.sendEvent({ type: "response.create" });
         }
       },
 
@@ -1467,6 +1495,8 @@ const ChatInterface = ({
       // Handle all server events as catch-all for video and MCP
       onServerEvent: async (event, _context) => {
 
+        console.log("Server event received:", event.type);
+
         const anyEvent = event as any;
         // Note: response.video.delta is handled via monkey-patch in session setup
         // because the SDK's message parser drops unknown event types
@@ -1518,7 +1548,11 @@ const ChatInterface = ({
             );
           }
         }
-      }
+      },
+
+      onResponseFunctionCallArgumentsDelta : async (event, _context) => {
+        console.log("Function call arguments delta:", event);
+      },
     });
   };
 
@@ -1630,10 +1664,10 @@ const ChatInterface = ({
               const messageText = typeof data === "string" ? data : new TextDecoder().decode(data);
               const parsed = JSON.parse(messageText);
 
-              // console.log(
-              //   "[VoiceLive direct] received event:",
-              //   parsed
-              // );
+              console.log(
+                "[VoiceLive direct] received event:",
+                parsed
+              );
 
               if (parsed.type === "response.created") {
                 updateDirectReconnectConversationId(parsed.response?.conversation_id);
@@ -5529,6 +5563,35 @@ const ChatInterface = ({
           </>
         )}
       </div>
+      )}
+      {/* ShowCard overlay */}
+      {cardOverlay !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setCardOverlay(null)}
+        >
+          <div
+            className="relative max-h-[80vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute right-3 top-3 text-gray-400 hover:text-gray-700 text-xl leading-none"
+              onClick={() => setCardOverlay(null)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <pre className="whitespace-pre-wrap break-words text-sm text-gray-800">
+              {(() => {
+                try {
+                  return JSON.stringify(JSON.parse(cardOverlay), null, 2);
+                } catch {
+                  return cardOverlay;
+                }
+              })()}
+            </pre>
+          </div>
+        </div>
       )}
     </div>
   );
