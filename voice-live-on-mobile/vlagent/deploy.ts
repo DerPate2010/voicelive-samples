@@ -4,8 +4,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as dotenv from "dotenv";
 
-// Load .env from parent hosted-agent2 folder (contains PROJECT_ENDPOINT)
-dotenv.config({ path: path.resolve(__dirname, "../hosted-agent2/.env") });
+// Load .env from the vlagent folder
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const PROJECT_ENDPOINT = process.env.PROJECT_ENDPOINT;
 const MODEL_DEPLOYMENT_NAME = process.env.MODEL_DEPLOYMENT_NAME ?? "gpt-4o";
@@ -13,7 +13,7 @@ const AGENT_NAME = "vlagent";
 
 if (!PROJECT_ENDPOINT) {
     throw new Error(
-        "PROJECT_ENDPOINT is not set. Add it to ../hosted-agent2/.env or set it as an environment variable."
+        "PROJECT_ENDPOINT is not set. Add it to vlagent/.env or set it as an environment variable."
     );
 }
 

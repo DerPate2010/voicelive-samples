@@ -31,12 +31,10 @@ flowchart LR
 
 	TokenBroker <-->|requests access token for managed identity| EntraID
 
-	MobileWebViewHost <-->|"WebSocket<br>VLAPI Session Token (Auth)<br>User Session Token (Context)"| VLAPI
-	VLAPI <-.-> FoundryAgent
+	MobileWebViewHost <-->|"WebSocket<br>VLAPI Session Token (Auth)<br>User Session Token (Context)<br>Media, Text and Function Calls"| VLAPI
+	VLAPI <-.->|"client tool calls"| FoundryAgent
 
-	FoundryAgent <-->|"tool calls<br>account balance and card id"| BusinessTools
-
-	BusinessTools -->|"card payload"| MobileWebViewHost
+	FoundryAgent <-->|"backend tool calls<br>account balance and card id"| BusinessTools
 
 	TokenBroker -->|User Session Token,<br>VLAPI config| AppCore
 	AppCore --> MobileWebViewHost
@@ -175,13 +173,66 @@ Recommended setup:
 
 The iOS app now fetches the SPA URL from `POST /vlapi/token`, so no static web app URL needs to be stored in Swift source anymore.
 
+## Foundry Agent Tool Call Flows
+
+The Foundry agent can invoke two kinds of tools: **backend tools** (e.g. OpenAPI endpoints on the mobile backend) and **client-side function tools** (handled directly by the chat UI). Both flows follow the same event sequence from the agent's perspective — the difference is where the function call is executed and the output produced.
+
+### Backend Tool Call
+
+A backend tool (e.g. `account_balance`) is defined as an OpenAPI tool in the agent definition. When the agent decides to call it, the agent runtime sends the HTTP request directly to the backend and uses the response as the function output before generating the final reply.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent as Agent runtime/<br>conversation events
+    participant Backend as Mobile Backend
+
+    User->>Agent: user message
+    Note over Agent: decides to call backend tool
+    Agent->>Backend: remote_function_call.arguments_done {name, arguments, callId}
+	Note over Backend: executes function
+    Backend-->>Agent: remote_function_call_output {callId, output}
+    Note over Agent: composes response from tool output
+    Agent-->>User: response
+```
+
+### Client-Side Function Tool Call
+
+A client-side function tool (e.g. `_Main_g_ShowCard_0`) is declared as a `function` tool in the agent definition. The agent runtime emits a `response.function_call.arguments_done` event to the connected client. The client executes the function locally (e.g. displays a card overlay), then sends back a `function_call_output` item, which triggers the agent to generate the final response.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant ChatUI as Chat Client
+    participant Agent as Agent runtime/<br>conversation events
+
+    User->>Agent: user message
+    Note over Agent: decides to call  function tool
+    Agent-->>ChatUI: function_call.arguments_done {name, arguments, callId}
+    Note over ChatUI: executes function locally
+    ChatUI->>Agent: function_call_output {callId, output}
+    Note over Agent: composes response from tool output
+    Agent-->>ChatUI: response
+```
+
 ## vlagent
 
 Path: `vlagent`
 
+Contains a TypeScript deploy script (`deploy.ts`) that creates a new version of the `vlagent` prompt agent in Azure AI Foundry. The agent definition (instructions, OpenAPI tool, MCP tool, and function tool) is maintained directly in the script.
+
 What to configure:
 
-- Update the backend server URL used by the OpenAPI tool definition in `agent.yaml` to match your deployed `mobile-backend` endpoint.
-- Keep that URL aligned with the same backend URL used by Android and iOS.
+- Update the backend server URL in `deploy.ts` (inside `accountBalanceSpec.servers`) to match your deployed `mobile-backend` endpoint.
+- Set `PROJECT_ENDPOINT` in `vlagent/.env` (or as an environment variable) to your Foundry project endpoint.
 
-The agent definition is separate from the native hosts, so it is not bootstrapped automatically by the backend.
+To deploy a new agent version:
+
+```bash
+cd vlagent
+npm install
+az login
+npm run deploy
+```
+
+The script prints the new agent version id on success. The agent definition is separate from the native hosts and is not bootstrapped automatically by the backend.
