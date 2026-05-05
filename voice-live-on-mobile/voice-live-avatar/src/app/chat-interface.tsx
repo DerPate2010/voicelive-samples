@@ -1495,8 +1495,6 @@ const ChatInterface = ({
       // Handle all server events as catch-all for video and MCP
       onServerEvent: async (event, _context) => {
 
-        console.log("Server event received:", event.type);
-
         const anyEvent = event as any;
         // Note: response.video.delta is handled via monkey-patch in session setup
         // because the SDK's message parser drops unknown event types
@@ -1548,10 +1546,6 @@ const ChatInterface = ({
             );
           }
         }
-      },
-
-      onResponseFunctionCallArgumentsDelta : async (event, _context) => {
-        console.log("Function call arguments delta:", event);
       },
     });
   };
@@ -1664,10 +1658,10 @@ const ChatInterface = ({
               const messageText = typeof data === "string" ? data : new TextDecoder().decode(data);
               const parsed = JSON.parse(messageText);
 
-              console.log(
-                "[VoiceLive direct] received event:",
-                parsed
-              );
+              // console.log(
+              //   "[VoiceLive direct] received event:",
+              //   parsed
+              // );
 
               if (parsed.type === "response.created") {
                 updateDirectReconnectConversationId(parsed.response?.conversation_id);
