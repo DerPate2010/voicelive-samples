@@ -76,7 +76,7 @@ Path: `voice-live-avatar`
 What to configure:
 
 - No build-time mobile-host-specific URL is required in the SPA itself.
-- For local browser testing, use the test page/runtime UI to enter endpoint, auth, middleware, and conversation settings.
+- For local browser testing, open the test UI at [http://localhost:3000/test](http://localhost:3000/test) to enter endpoint, auth, middleware, and conversation settings.
 - For hosted mobile usage, the SPA is configured at runtime by the native hosts via `window.connectVoiceLiveAvatar(...)`.
 
 Deploy with `azd` from `voice-live-avatar` if you want Azure Static Web Apps provisioning:
